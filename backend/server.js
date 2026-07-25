@@ -1026,11 +1026,7 @@ async function startStaticServing() {
 
     // SPA catch-all: any GET request that is NOT an /api route gets index.html
     // This is critical for React Router to work on page refresh
-    app.get("*", (req, res) => {
-      // Don't interfere with API routes (they should already be handled above)
-      if (req.path.startsWith("/api/") || req.path.startsWith("/socket.io/")) {
-        return res.status(404).json({ error: "API route not found" });
-      }
+    app.get(/^\/(?!api\/|socket\.io\/).*/, (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   } else {
@@ -1038,6 +1034,11 @@ async function startStaticServing() {
     console.log("[INFO]:   Run 'cd frontend && npm run build' to build the frontend.");
   }
 }
+
+// Generic API 404 handler — returns JSON for unmatched API routes instead of empty body
+app.use("/api", (req, res) => {
+  res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
+});
 
 // Background schedule evaluate loop (runs every 60 seconds)
 async function checkSchedules() {
