@@ -23,7 +23,7 @@ const toPublicUser = (u) => ({
   photoURL: null,
   isAuthorized: u.isAuthorized,
 });
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT || "3000");
 const app = express();
 const httpServer = createServer(app);
 
