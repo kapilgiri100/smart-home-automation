@@ -997,15 +997,45 @@ io.on("connection", socket => {
 // Serve the built frontend (../frontend/dist) when it exists.
 // In development, run the frontend separately with `npm run dev` inside /frontend —
 // its Vite dev server proxies /api and /socket.io to this backend (see frontend/vite.config.js).
+//
+// IMPORTANT: The catch-all "GET *" handler for SPA routes (like /settings, /activity)
+// is registered HERE — AFTER all API routes, but BEFORE the server starts listening.
+// This ensures that:
+//   1. API routes are tried first (e.g., /api/auth/login)
+//   2. Static files are served (e.g., /assets/index-xxx.js)
+//   3. All other GET requests (React Router paths) get index.html (SPA fallback)
 async function startStaticServing() {
-  const distPath = path.join(process.cwd(), "..", "frontend", "dist");
-  if (fs.existsSync(distPath)) {
+  // Try multiple possible locations for the frontend dist folder
+  const possiblePaths = [
+    path.join(process.cwd(), "..", "frontend", "dist"),           // Render (root=/opt/render/project/src/backend)
+    path.join(process.cwd(), "..", "..", "frontend", "dist"),     // Fallback
+    path.join(process.cwd(), "frontend", "dist"),                 // Local monorepo
+  ];
+
+  let distPath = null;
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      distPath = p;
+      break;
+    }
+  }
+
+  if (distPath) {
+    console.log("[INFO]: Serving frontend from", distPath);
     app.use(express.static(distPath));
+
+    // SPA catch-all: any GET request that is NOT an /api route gets index.html
+    // This is critical for React Router to work on page refresh
     app.get("*", (req, res) => {
+      // Don't interfere with API routes (they should already be handled above)
+      if (req.path.startsWith("/api/") || req.path.startsWith("/socket.io/")) {
+        return res.status(404).json({ error: "API route not found" });
+      }
       res.sendFile(path.join(distPath, "index.html"));
     });
   } else {
-    console.log("[INFO]: No frontend build found at", distPath, "- running in API/Socket.IO-only mode. Start the frontend dev server separately (cd frontend && npm run dev).");
+    console.log("[INFO]: No frontend build found. Running in API/Socket.IO-only mode.");
+    console.log("[INFO]:   Run 'cd frontend && npm run build' to build the frontend.");
   }
 }
 
