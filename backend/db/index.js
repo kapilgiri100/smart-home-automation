@@ -15,12 +15,16 @@ const sslConfig = process.env.SQL_SSL === "true"
   : false;
 
 // Support Render's DATABASE_URL connection string (e.g., postgres://user:pass@host:5432/dbname)
-const connectionString = process.env.DATABASE_URL;
+// Append ?sslmode=require to silence the pg SSL warning and ensure secure connections
+let connectionString = process.env.DATABASE_URL;
+if (connectionString && process.env.SQL_SSL === "true") {
+  const separator = connectionString.includes("?") ? "&" : "?";
+  connectionString = `${connectionString}${separator}sslmode=require`;
+}
 
 const pool = connectionString
   ? new Pool({
       connectionString,
-      ssl: sslConfig,
       connectionTimeoutMillis: 15000,
       idleTimeoutMillis: 1000,
       max: 10,
