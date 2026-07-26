@@ -6,6 +6,7 @@ dotenv.config();
 
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
+import { sql } from "drizzle-orm";
 import * as schema from "./schema.js";
 
 const { Pool } = pg;
@@ -66,5 +67,83 @@ export async function runWithRetry(fn, retries = 3, delay = 2000) {
     }
     throw error;
   }
+}
+
+/**
+ * Auto-creates all database tables based on the Drizzle ORM schema.
+ * This is essential for Render deployments where the PostgreSQL database
+ * starts empty and npm run db:push cannot run at build time.
+ * 
+ * The SQL uses IF NOT EXISTS so it's safe to call on every startup.
+ */
+export async function createTables() {
+  console.log("[DB MIGRATE]: Auto-creating database tables (if not exist)...");
+  
+  const statements = [
+    // 1. Users table
+    `CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      uid TEXT NOT NULL UNIQUE,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      display_name TEXT,
+      is_authorized BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+    // 2. Appliances table
+    `CREATE TABLE IF NOT EXISTS appliances (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      status BOOLEAN NOT NULL DEFAULT false,
+      updated_at TIMESTAMP DEFAULT NOW()
+    )`,
+    // 3. Sensors table
+    `CREATE TABLE IF NOT EXISTS sensors (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      fire_status BOOLEAN NOT NULL DEFAULT false,
+      gas_status BOOLEAN NOT NULL DEFAULT false,
+      fire_pump_status BOOLEAN NOT NULL DEFAULT false,
+      fire_sensor_available BOOLEAN NOT NULL DEFAULT true,
+      gas_sensor_available BOOLEAN NOT NULL DEFAULT true,
+      sonic_sensor_available BOOLEAN NOT NULL DEFAULT true,
+      updated_at TIMESTAMP DEFAULT NOW()
+    )`,
+    // 4. Water tank table
+    `CREATE TABLE IF NOT EXISTS water_tank (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      percentage INTEGER NOT NULL DEFAULT 0,
+      pump_status BOOLEAN NOT NULL DEFAULT false,
+      tank_height INTEGER NOT NULL DEFAULT 100,
+      updated_at TIMESTAMP DEFAULT NOW()
+    )`,
+    // 5. Activity logs table
+    `CREATE TABLE IF NOT EXISTS activity_logs (
+      id SERIAL PRIMARY KEY,
+      event TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+    // 6. Schedules table
+    `CREATE TABLE IF NOT EXISTS schedules (
+      id SERIAL PRIMARY KEY,
+      appliance_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      time TEXT NOT NULL,
+      timezone TEXT NOT NULL DEFAULT 'UTC',
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMP DEFAULT NOW()
+    )`,
+  ];
+
+  for (const stmt of statements) {
+    try {
+      await runWithRetry(() => db.execute(sql.raw(stmt)));
+      console.log(`[DB MIGRATE]: Table created/verified successfully.`);
+    } catch (error) {
+      console.error(`[DB MIGRATE]: Error creating table:`, error?.message);
+      throw error;
+    }
+  }
+  
+  console.log("[DB MIGRATE]: All database tables verified/created successfully!");
 }
 

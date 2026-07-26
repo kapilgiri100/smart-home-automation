@@ -9,7 +9,7 @@ import bcrypt from "bcryptjs";
 import { eq, desc } from "drizzle-orm";
 
 // dotenv is loaded inside db/index.js (first import) to ensure env vars are available before pool creation
-import { db, runWithRetry } from "./db/index.js";
+import { db, runWithRetry, createTables } from "./db/index.js";
 import { appliances, sensors, waterTank, activityLogs, users, schedules } from "./db/schema.js";
 import { requireAuth, requireAuthorized } from "./middleware/auth.js";
 
@@ -994,6 +994,16 @@ io.on("connection", socket => {
   });
 });
 
+// Health check endpoint for Render and monitoring
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    dbConnected: !!db
+  });
+});
+
 // Serve the built frontend (../frontend/dist) when it exists.
 // In development, run the frontend separately with `npm run dev` inside /frontend —
 // its Vite dev server proxies /api and /socket.io to this backend (see frontend/vite.config.js).
@@ -1152,8 +1162,18 @@ async function initializeDatabase() {
 // Evaluate schedules every 60 seconds
 setInterval(checkSchedules, 60000);
 startStaticServing().then(async () => {
-  // Initialize and heal database records on startup
-  await initializeDatabase();
+  try {
+    // Step 1: Auto-create database tables (if they don't exist)
+    // This is critical for Render deployments where PostgreSQL starts empty
+    await createTables();
+    
+    // Step 2: Initialize and heal database records (seed default data)
+    await initializeDatabase();
+  } catch (error) {
+    console.error("[STARTUP]: Database initialization failed:", error?.message);
+    console.error("[STARTUP]: The server will still attempt to start, but some features may not work.");
+  }
+  
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server is running at http://0.0.0.0:${PORT}`);
     // Check schedules immediately on boot

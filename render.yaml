@@ -1,0 +1,24 @@
+# Render Blueprint Configuration for Smart Home Automation
+# This tells Render exactly how to build and run your application
+# https://render.com/docs/blueprint-spec
+
+services:
+  # Backend web service (Node.js + PostgreSQL)
+  - type: web
+    name: smart-home-automation
+    runtime: node
+    rootDir: backend
+    buildCommand: cd ../frontend && npm install && npm run build
+    startCommand: node server.js
+    envVars:
+      # Render auto-injects PORT (default: 10000)
+      # Render auto-injects DATABASE_URL when you attach PostgreSQL
+      - key: SQL_SSL
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: AUTH_PASSCODE
+        value: IOTSAFE2026
+    # Health check endpoint
+    healthCheckPath: /api/health
+
