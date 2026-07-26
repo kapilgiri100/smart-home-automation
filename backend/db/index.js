@@ -6,7 +6,6 @@ dotenv.config();
 
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { sql } from "drizzle-orm";
 import * as schema from "./schema.js";
 
 const { Pool } = pg;
@@ -136,7 +135,7 @@ export async function createTables() {
 
   for (const stmt of statements) {
     try {
-      await runWithRetry(() => db.execute(sql.raw(stmt)));
+      await runWithRetry(() => pool.query(stmt));
       console.log(`[DB MIGRATE]: Table created/verified successfully.`);
     } catch (error) {
       console.error(`[DB MIGRATE]: Error creating table:`, error?.message);

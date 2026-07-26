@@ -1161,22 +1161,32 @@ async function initializeDatabase() {
 
 // Evaluate schedules every 60 seconds
 setInterval(checkSchedules, 60000);
+
+// START THE SERVER IMMEDIATELY - even before DB is ready.
+// The API routes are already registered, and runWithRetry() will retry DB queries.
+// This ensures Render's health check succeeds and users get immediate responses.
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`[SERVER]: Server is running at http://0.0.0.0:${PORT}`);
+  // Check schedules immediately on boot
+  checkSchedules();
+});
+
+// Then serve static frontend and initialize DB in the background
 startStaticServing().then(async () => {
   try {
     // Step 1: Auto-create database tables (if they don't exist)
     // This is critical for Render deployments where PostgreSQL starts empty
+    console.log("[STARTUP]: Starting database initialization...");
     await createTables();
     
     // Step 2: Initialize and heal database records (seed default data)
     await initializeDatabase();
+    console.log("[STARTUP]: Database fully initialized!");
   } catch (error) {
     console.error("[STARTUP]: Database initialization failed:", error?.message);
-    console.error("[STARTUP]: The server will still attempt to start, but some features may not work.");
+    console.error("[STARTUP]: The server is still running. DB queries will retry automatically.");
   }
-  
-  httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server is running at http://0.0.0.0:${PORT}`);
-    // Check schedules immediately on boot
-    checkSchedules();
-  });
+}).catch(err => {
+  console.error("[STARTUP]: Static serving setup failed:", err?.message);
+  // Server is already listening, so this is not fatal
 });
