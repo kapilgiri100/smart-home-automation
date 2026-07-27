@@ -15,8 +15,14 @@ export const AuthProvider = ({ children }) => {
     const savedUser = localStorage.getItem(STORAGE_USER_KEY);
     const savedToken = localStorage.getItem(STORAGE_TOKEN_KEY);
     if (savedUser && savedToken) {
-      setUser(JSON.parse(savedUser));
-      setToken(savedToken);
+      try {
+        setUser(JSON.parse(savedUser));
+        setToken(savedToken);
+      } catch (e) {
+        // Corrupted localStorage data — clear it
+        localStorage.removeItem(STORAGE_USER_KEY);
+        localStorage.removeItem(STORAGE_TOKEN_KEY);
+      }
     }
     setLoading(false);
   }, []);
@@ -42,6 +48,21 @@ export const AuthProvider = ({ children }) => {
     return email;
   };
 
+  const safeParseJSON = async (response) => {
+    const text = await response.text();
+    if (!text) {
+      throw new Error("Server returned an empty response. Make sure the backend server is running on port 3000.");
+    }
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      if (text.startsWith("<") || text.startsWith("<!DOCTYPE")) {
+        throw new Error("Backend server returned HTML instead of JSON. The server may be down or the proxy is misconfigured.");
+      }
+      throw new Error(`Unexpected response from server: ${text.substring(0, 100)}...`);
+    }
+  };
+
   const loginUser = async (name, password) => {
     setLoading(true);
     try {
@@ -51,7 +72,7 @@ export const AuthProvider = ({ children }) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
+      const data = await safeParseJSON(res);
       if (!res.ok) {
         const error = new Error(data.error || "Failed to log in.");
         error.code = "auth/invalid-credential";
@@ -77,7 +98,7 @@ export const AuthProvider = ({ children }) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, displayName: fullName }),
       });
-      const data = await res.json();
+      const data = await safeParseJSON(res);
       if (!res.ok) {
         const error = new Error(data.error || "Failed to register account.");
         if (res.status === 409) error.code = "auth/email-already-in-use";
