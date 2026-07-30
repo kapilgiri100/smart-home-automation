@@ -103,6 +103,17 @@ bool lastSwitchFanState = HIGH;
 bool lastSwitchTvState = HIGH;
 bool lastSwitchSocketState = HIGH;
 
+// Debounce: timestamps for when each switch was pressed, flags to prevent multiple toggles
+const unsigned long DEBOUNCE_DELAY = 300; // 300ms debounce window
+unsigned long debounceLightTime = 0;
+unsigned long debounceFanTime = 0;
+unsigned long debounceTvTime = 0;
+unsigned long debounceSocketTime = 0;
+bool switchLightPressed = false;
+bool switchFanPressed = false;
+bool switchTvPressed = false;
+bool switchSocketPressed = false;
+
 bool lightState = false;
 bool fanState = false;
 bool tvState = false;
@@ -467,41 +478,75 @@ void loop() {
   bool switchSocket = digitalRead(SWITCH_SOCKET);
 
   bool stateChanged = false;
+  unsigned long now = millis();
 
-  if (switchLight != lastSwitchLightState) {
-    lightState = !lightState;
-    digitalWrite(RELAY_LIGHT, lightState ? LOW : HIGH);
-    lastSwitchLightState = switchLight;
-    stateChanged = true;
-    Serial.println("Physical Switch: Light Toggled!");
-    delay(50); // Debounce
+  // --- Light Switch (Debounced) ---
+  if (switchLight == LOW) {
+    if (!switchLightPressed && (now - debounceLightTime > DEBOUNCE_DELAY)) {
+      switchLightPressed = true;
+      debounceLightTime = now;
+      lightState = !lightState;
+      digitalWrite(RELAY_LIGHT, lightState ? LOW : HIGH);
+      stateChanged = true;
+      Serial.println("Physical Switch: Light Toggled!");
+    }
+  } else {
+    // Reset flag when released, so next press fires again
+    if (switchLightPressed) {
+      switchLightPressed = false;
+      debounceLightTime = now;
+    }
   }
 
-  if (switchFan != lastSwitchFanState) {
-    fanState = !fanState;
-    digitalWrite(RELAY_FAN, fanState ? LOW : HIGH);
-    lastSwitchFanState = switchFan;
-    stateChanged = true;
-    Serial.println("Physical Switch: Fan Toggled!");
-    delay(50);
+  // --- Fan Switch (Debounced) ---
+  if (switchFan == LOW) {
+    if (!switchFanPressed && (now - debounceFanTime > DEBOUNCE_DELAY)) {
+      switchFanPressed = true;
+      debounceFanTime = now;
+      fanState = !fanState;
+      digitalWrite(RELAY_FAN, fanState ? LOW : HIGH);
+      stateChanged = true;
+      Serial.println("Physical Switch: Fan Toggled!");
+    }
+  } else {
+    if (switchFanPressed) {
+      switchFanPressed = false;
+      debounceFanTime = now;
+    }
   }
 
-  if (switchTv != lastSwitchTvState) {
-    tvState = !tvState;
-    digitalWrite(RELAY_WATER_PUMP, tvState ? LOW : HIGH);
-    lastSwitchTvState = switchTv;
-    stateChanged = true;
-    Serial.println("Physical Switch: Overhead Pump Toggled!");
-    delay(50);
+  // --- TV Switch (Debounced) ---
+  if (switchTv == LOW) {
+    if (!switchTvPressed && (now - debounceTvTime > DEBOUNCE_DELAY)) {
+      switchTvPressed = true;
+      debounceTvTime = now;
+      tvState = !tvState;
+      digitalWrite(RELAY_WATER_PUMP, tvState ? LOW : HIGH);
+      stateChanged = true;
+      Serial.println("Physical Switch: Overhead Pump Toggled!");
+    }
+  } else {
+    if (switchTvPressed) {
+      switchTvPressed = false;
+      debounceTvTime = now;
+    }
   }
 
-  if (switchSocket != lastSwitchSocketState) {
-    socketState = !socketState;
-    digitalWrite(RELAY_FIRE_PUMP, socketState ? LOW : HIGH);
-    lastSwitchSocketState = switchSocket;
-    stateChanged = true;
-    Serial.println("Physical Switch: Fire Pump Toggled!");
-    delay(50);
+  // --- Socket Switch (Debounced) ---
+  if (switchSocket == LOW) {
+    if (!switchSocketPressed && (now - debounceSocketTime > DEBOUNCE_DELAY)) {
+      switchSocketPressed = true;
+      debounceSocketTime = now;
+      socketState = !socketState;
+      digitalWrite(RELAY_FIRE_PUMP, socketState ? LOW : HIGH);
+      stateChanged = true;
+      Serial.println("Physical Switch: Fire Pump Toggled!");
+    }
+  } else {
+    if (switchSocketPressed) {
+      switchSocketPressed = false;
+      debounceSocketTime = now;
+    }
   }
 
   // 2. Read Safety Sensors
@@ -547,15 +592,24 @@ void loop() {
   // 4. Calculate Water Tank Percentage
   int waterLevel = getWaterLevelPercentage();
 
-  // Local physical autonomous safeguard:
-  // Active when below 20% capacity, inactive when reaches 80% capacity
+// Local physical autonomous safeguard with hysteresis:
+  // - When pump is OFF: turn ON only when water level drops to 20% or below
+  // - When pump is ON:  turn OFF only when water level reaches 80% or above
+  // This creates a natural deadband preventing rapid ON/OFF toggling
+  // when water level fluctuates near the thresholds.
   if (sonicAvail) {
-    if (waterLevel < 20) {
-      digitalWrite(RELAY_WATER_PUMP, LOW);  // Turn ON overhead fill pump (Active Low)
-      tvState = true;
-    } else if (waterLevel >= 80) {
-      digitalWrite(RELAY_WATER_PUMP, HIGH); // Turn OFF overhead fill pump (Active Low)
-      tvState = false;
+    if (tvState) {
+      // Pump is currently ON — only turn OFF when tank is sufficiently full
+      if (waterLevel >= 80) {
+        digitalWrite(RELAY_WATER_PUMP, HIGH); // Turn OFF overhead fill pump (Active Low)
+        tvState = false;
+      }
+    } else {
+      // Pump is currently OFF — only turn ON when tank is critically low
+      if (waterLevel <= 20) {
+        digitalWrite(RELAY_WATER_PUMP, LOW);  // Turn ON overhead fill pump (Active Low)
+        tvState = true;
+      }
     }
   }
 

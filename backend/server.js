@@ -635,22 +635,31 @@ app.post("/api/device/update", async (req, res) => {
       }
     }
 
-    // 3. Process Water Level
+    // 3. Process Water Level with hysteresis (prevents rapid pump toggling):
+    //    - Pump OFF -> turns ON  only when water level <= 20%
+    //    - Pump ON  -> turns OFF only when water level >= 80%
+    //    This creates a natural deadband, so fluctuations near thresholds don't chattering.
     if (typeof waterLevel === "number") {
       if (sonicAvail) {
         const currentTank = await db.select().from(waterTank).where(eq(waterTank.id, 1)).limit(1);
         const prevPumpStatus = currentTank[0]?.pumpStatus || false;
         let nextPumpStatus = prevPumpStatus;
 
-        // Automatic Water Level control rules:
-        // Level < 20% -> Pump ON
-        // Level reaches 80% -> Pump OFF
-        if (waterLevel < 20 && !prevPumpStatus) {
-          nextPumpStatus = true;
-          await addActivityLog(`Water Tank Low (${waterLevel}%). Overhead Filling Pump Started.`);
-        } else if (waterLevel >= 80 && prevPumpStatus) {
-          nextPumpStatus = false;
-          await addActivityLog(`Water Tank Reached 80%. Overhead Filling Pump Stopped.`);
+        // Automatic Water Level control rules with hysteresis (state-aware):
+        // If pump is currently ON, only turn it OFF when tank reaches 80% or above.
+        // If pump is currently OFF, only turn it ON when tank drops to 20% or below.
+        if (prevPumpStatus) {
+          // Pump is ON — only turn OFF when tank is sufficiently full
+          if (waterLevel >= 80) {
+            nextPumpStatus = false;
+            await addActivityLog(`Water Tank Reached 80%. Overhead Filling Pump Stopped.`);
+          }
+        } else {
+          // Pump is OFF — only turn ON when tank is critically low
+          if (waterLevel <= 20) {
+            nextPumpStatus = true;
+            await addActivityLog(`Water Tank Low (${waterLevel}%). Overhead Filling Pump Started.`);
+          }
         }
         await db.update(waterTank).set({
           percentage: waterLevel,
@@ -917,18 +926,28 @@ io.on("connection", socket => {
         }
       }
 
-      // 3. Process Water Level
+      // 3. Process Water Level with hysteresis (prevents rapid pump toggling):
+      //    - Pump OFF -> turns ON  only when water level <= 20%
+      //    - Pump ON  -> turns OFF only when water level >= 80%
+      //    This creates a natural deadband, so fluctuations near thresholds don't chattering.
       if (typeof waterLevel === "number") {
         if (sonicAvail) {
           const currentTank = await db.select().from(waterTank).where(eq(waterTank.id, 1)).limit(1);
           const prevPumpStatus = currentTank[0]?.pumpStatus || false;
           let nextPumpStatus = prevPumpStatus;
-          if (waterLevel < 20 && !prevPumpStatus) {
-            nextPumpStatus = true;
-            await addActivityLog(`Water Tank Low (${waterLevel}%). Overhead Filling Pump Started.`);
-          } else if (waterLevel >= 80 && prevPumpStatus) {
-            nextPumpStatus = false;
-            await addActivityLog(`Water Tank Reached 80%. Overhead Filling Pump Stopped.`);
+          // Hysteresis: state-aware control
+          if (prevPumpStatus) {
+            // Pump is ON — only turn OFF when tank is sufficiently full
+            if (waterLevel >= 80) {
+              nextPumpStatus = false;
+              await addActivityLog(`Water Tank Reached 80%. Overhead Filling Pump Stopped.`);
+            }
+          } else {
+            // Pump is OFF — only turn ON when tank is critically low
+            if (waterLevel <= 20) {
+              nextPumpStatus = true;
+              await addActivityLog(`Water Tank Low (${waterLevel}%). Overhead Filling Pump Started.`);
+            }
           }
           await db.update(waterTank).set({
             percentage: waterLevel,

@@ -477,13 +477,20 @@ export const Dashboard = () => {
     setSimWaterLevel(level);
     const isAvailable = sensors.sonicSensorAvailable !== false;
     if (isAvailable) {
-      // Optimistic Update: instantly update water state on UI and auto-trigger filling pump if capacity is low
+      // Optimistic Update with hysteresis: use current pump status to decide transitions
       setWaterTank(prev => {
         let nextPumpStatus = prev.pumpStatus;
-        if (level < 20) {
-          nextPumpStatus = true;
-        } else if (level >= 80) {
-          nextPumpStatus = false;
+        // Hysteresis: state-aware control prevents rapid toggling at thresholds
+        if (prev.pumpStatus) {
+          // Pump is ON — only turn OFF when tank reaches 80% or above
+          if (level >= 80) {
+            nextPumpStatus = false;
+          }
+        } else {
+          // Pump is OFF — only turn ON when tank drops to 20% or below
+          if (level <= 20) {
+            nextPumpStatus = true;
+          }
         }
         setAppliances(prevApps => prevApps.map(app => app.id === "tv" ? {
           ...app,
