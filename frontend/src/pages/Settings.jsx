@@ -136,49 +136,69 @@ export const Settings = () => {
   // Time = Distance * 2 / Speed
   const roundTripTimeUs = Math.round(airDistance * 2 / 0.0343);
   const pinout = [{
-    peripheral: "Light Relay",
+    peripheral: "Relay 1 — Light Bulb 1",
     gpio: "GPIO 18",
     mode: "OUTPUT (Active Low)"
   }, {
-    peripheral: "Fan Relay",
+    peripheral: "Relay 2 — Light Bulb 2",
     gpio: "GPIO 19",
     mode: "OUTPUT (Active Low)"
   }, {
-    peripheral: "TV Relay",
-    gpio: "GPIO 21",
-    mode: "OUTPUT (Active Low)"
-  }, {
-    peripheral: "Smart Socket Relay",
-    gpio: "GPIO 22",
-    mode: "OUTPUT (Active Low)"
-  }, {
-    peripheral: "Water Pump Relay",
+    peripheral: "Relay 3 — Light Bulb 3 (expansion)",
     gpio: "GPIO 32",
     mode: "OUTPUT (Active Low)"
   }, {
+    peripheral: "Relay 4 — Light Bulb 4 (expansion)",
+    gpio: "GPIO 33",
+    mode: "OUTPUT (Active Low)"
+  }, {
+    peripheral: "Relay 5 — Overhead Fill Pump (Pump 1)",
+    gpio: "GPIO 21",
+    mode: "OUTPUT (Active Low)"
+  }, {
+    peripheral: "Relay 6 — Fire Extinguisher Pump (Pump 2)",
+    gpio: "GPIO 22",
+    mode: "OUTPUT (Active Low)"
+  }, {
+    peripheral: "Physical Switch 1 — Light",
+    gpio: "GPIO 4",
+    mode: "INPUT (Internal Pullup)"
+  }, {
+    peripheral: "Physical Switch 2 — Fan",
+    gpio: "GPIO 5",
+    mode: "INPUT (Internal Pullup)"
+  }, {
+    peripheral: "Physical Switch 3 — Fill Pump",
+    gpio: "GPIO 12",
+    mode: "INPUT (Internal Pullup)"
+  }, {
+    peripheral: "Physical Switch 4 — Fire Pump",
+    gpio: "GPIO 13",
+    mode: "INPUT (Internal Pullup)"
+  }, {
     peripheral: "Flame Sensor (Digital)",
     gpio: "GPIO 35",
-    mode: "INPUT"
+    mode: "INPUT (Active High = fire)"
   }, {
     peripheral: "MQ-2 Gas Sensor (Analog)",
     gpio: "GPIO 34",
-    mode: "INPUT (Analog)"
+    mode: "INPUT (Analog, 11dB atten)"
   }, {
-    peripheral: "HC-SR04 Trigger",
+    peripheral: "HC-SR04 Ultrasonic — Trigger",
     gpio: "GPIO 25",
     mode: "OUTPUT"
   }, {
-    peripheral: "HC-SR04 Echo",
+    peripheral: "HC-SR04 Ultrasonic — Echo",
     gpio: "GPIO 26",
     mode: "INPUT"
   }, {
-    peripheral: "Buzzer Alarm",
+    peripheral: "Active Buzzer (Alarm)",
     gpio: "GPIO 27",
-    mode: "OUTPUT"
+    mode: "OUTPUT (High = sound)"
   }, {
     peripheral: "Warning Indicator LED",
     gpio: "GPIO 14",
-    mode: "OUTPUT"
+    mode: "OUTPUT (High = lit)"
   }];
   return <div className="space-y-8 max-w-4xl">
       {/* Page Title */}

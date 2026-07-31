@@ -1139,13 +1139,19 @@ async function initializeDatabase() {
       }));
     }
 
-    // 3. Seed / Update standard 4 appliances matching the 4-relay specification
+    // 3. Seed / Update standard 6 appliances (4 manual + 2 automated)
     const defaultApps = [{
       id: "light",
       name: "Light Bulb 1"
     }, {
       id: "fan",
       name: "Light Bulb 2"
+    }, {
+      id: "bulb3",
+      name: "Light Bulb 3"
+    }, {
+      id: "bulb4",
+      name: "Light Bulb 4"
     }, {
       id: "tv",
       name: "Overhead Fill Pump"

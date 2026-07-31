@@ -158,6 +158,14 @@ export const Dashboard = () => {
     name: "Light Bulb 2",
     status: false
   }, {
+    id: "bulb3",
+    name: "Light Bulb 3",
+    status: false
+  }, {
+    id: "bulb4",
+    name: "Light Bulb 4",
+    status: false
+  }, {
     id: "tv",
     name: "Overhead Fill Pump",
     status: false
@@ -184,9 +192,11 @@ export const Dashboard = () => {
   const [simFire, setSimFire] = useState(false);
   const [simGasValue, setSimGasValue] = useState(400); // Analog raw 0 - 4095
   const [simWaterLevel, setSimWaterLevel] = useState(50); // percentage 0 - 100
-  const [simPhysicalSwitches, setSimPhysicalSwitches] = useState({
+const [simPhysicalSwitches, setSimPhysicalSwitches] = useState({
     light: false,
     fan: false,
+    bulb3: false,
+    bulb4: false,
     tv: false,
     socket: false
   });
@@ -540,13 +550,17 @@ export const Dashboard = () => {
     });
   };
 
-  // Helper icons
+// Helper icons
   const getApplianceIcon = (id, active) => {
     switch (id) {
       case "light":
         return <Lightbulb className={`h-6 w-6 ${active ? "text-yellow-400 font-bold drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]" : "text-slate-500"}`} />;
       case "fan":
         return <FanIconComponent className={`h-6 w-6 ${active ? "drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]" : ""}`} active={active} />;
+      case "bulb3":
+        return <Lightbulb className={`h-6 w-6 ${active ? "text-yellow-400 font-bold drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]" : "text-slate-500"}`} />;
+      case "bulb4":
+        return <Lightbulb className={`h-6 w-6 ${active ? "text-yellow-400 font-bold drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]" : "text-slate-500"}`} />;
       case "tv":
         return <Droplet className={`h-6 w-6 ${active ? "text-blue-400 animate-pulse drop-shadow-[0_0_10px_rgba(96,165,250,0.5)]" : "text-slate-500"}`} />;
       case "socket":
@@ -560,7 +574,7 @@ export const Dashboard = () => {
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-white/5 gap-4">
         <div>
           <h2 className="text-2xl font-bold text-white tracking-tight">System Overview</h2>
-          <p className="text-slate-400 text-sm">Monitoring 8 active sensors and 4 controllers.</p>
+<p className="text-slate-400 text-sm">Monitoring 8 active sensors and 6 controllers.</p>
         </div>
         <div className="flex gap-4">
           <div className="flex flex-col items-end">
@@ -724,21 +738,23 @@ export const Dashboard = () => {
         </div>
       </div>
 
-      {/* 3. Middle Section: Appliances, Water Tank and Safety Test Console */}
+{/* 3. Middle Section: Appliances, Water Tank and Safety Test Console */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Appliances Overview Widget */}
-        <div className="bg-[#16181D] border border-white/5 rounded-2xl p-6 flex flex-col justify-between">
+{/* Appliances Overview Widget */}
+        <div className="bg-[#16181D] border border-white/5 rounded-2xl p-6 flex flex-col space-y-6">
+          
+{/* --- Manual Appliances Section (4 Switches) --- */}
           <div>
-            <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-3">
               <div>
-                <h2 className="text-sm font-bold uppercase tracking-wider text-white">Appliances Status</h2>
-                <p className="text-xs text-slate-400 mt-1">Direct interactive controls</p>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-white">Manual Appliances</h2>
+                <p className="text-xs text-slate-400 mt-1">Four light bulb switch control system</p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3.5">
-              {appliances.map(app => {
+              {appliances.filter(a => a.id === "light" || a.id === "fan" || a.id === "bulb3" || a.id === "bulb4").map(app => {
               const active = app.status;
               return <div key={app.id} onClick={() => toggleAppliance(app.id, active)} className={`p-3.5 rounded-xl border flex flex-col justify-between h-28 text-left transition-all cursor-pointer group/card ${active ? "bg-blue-600/5 border-blue-500/20 hover:bg-blue-600/10" : "bg-[#0A0B0D]/50 border-white/5 hover:bg-white/5"}`}>
                     <div className="flex items-center justify-between w-full">
@@ -779,6 +795,63 @@ export const Dashboard = () => {
             })}
             </div>
           </div>
+
+          {/* --- Automated Active Section --- */}
+          <div>
+            <div className="flex items-center justify-between border-b border-amber-500/20 pb-3 mb-3">
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400">Automated Active</h2>
+                <p className="text-xs text-slate-400 mt-1">System-controlled pumps with safety logic</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3.5">
+              {appliances.filter(a => a.id === "tv" || a.id === "socket").map(app => {
+              const active = app.status;
+              return <div key={app.id} onClick={() => toggleAppliance(app.id, active)} className={`p-3.5 rounded-xl border flex flex-col justify-between h-28 text-left transition-all cursor-pointer group/card ${active ? "bg-amber-600/5 border-amber-500/20 hover:bg-amber-600/10" : "bg-[#0A0B0D]/50 border-white/5 hover:bg-white/5"}`}>
+                    <div className="flex items-center justify-between w-full">
+                      <div className={`p-1.5 rounded-lg ${active ? "bg-amber-600/10 text-amber-400" : "bg-[#16181D] text-slate-500"}`}>
+                        {getApplianceIcon(app.id, active)}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[7px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">Auto</span>
+                        {editingId !== app.id && <button onClick={e => {
+                      e.stopPropagation();
+                      setEditingId(app.id);
+                      setEditNameValue(app.name);
+                    }} className="opacity-0 group-hover/card:opacity-100 p-1 text-slate-500 hover:text-white rounded transition-all" title="Rename">
+                            <Pencil className="h-3 w-3" />
+                          </button>}
+                        <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-amber-500 shadow-[0_0_8px_rgba(251,191,36,0.6)]" : "bg-slate-700"}`}></span>
+                      </div>
+                    </div>
+                    <div className="mt-2.5">
+                      {editingId === app.id ? <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                          <input type="text" value={editNameValue} onChange={e => setEditNameValue(e.target.value)} className="bg-[#0A0B0D] border border-amber-500/50 rounded px-1.5 py-0.5 text-[10px] text-white focus:outline-none w-20" autoFocus onKeyDown={e => {
+                      if (e.key === "Enter") handleSaveName(app.id);
+                      if (e.key === "Escape") setEditingId(null);
+                    }} />
+                          <button onClick={() => handleSaveName(app.id)} className="p-0.5 text-emerald-400 hover:bg-emerald-500/10 rounded">
+                            <Check className="h-3 w-3" />
+                          </button>
+                          <button onClick={() => setEditingId(null)} className="p-0.5 text-rose-400 hover:bg-rose-500/10 rounded">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div> : <>
+                          <p className="text-xs font-bold text-white truncate">{app.name}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <p className={`text-[9px] font-semibold uppercase tracking-wider ${active ? "text-amber-400" : "text-slate-500"}`}>
+                              {active ? "ON" : "OFF"}
+                            </p>
+                            <span className="text-[7px] text-slate-500 font-medium">(Auto)</span>
+                          </div>
+                        </>}
+                    </div>
+                  </div>;
+            })}
+            </div>
+          </div>
+
         </div>
 
         {/* Water Tank Diagram Column */}
