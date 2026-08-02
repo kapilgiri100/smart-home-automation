@@ -49,12 +49,21 @@ Split the appliances section into two distinct blocks:
 - [x] Updated D16/D17 switch pins in board diagram
 - [x] Added GPIO 16/17 rows to pinout table
 
+#### Step 6: Active-Low Buzzer & Warning LED Relay Consistency
+- [x] esp32/main.ino — Buzzer (GPIO 27) & LED (GPIO 14) driven active-low via relay module (LOW = relay energized = ON)
+- [x] esp32/main.ino — setup() initializes both relays OFF (HIGH)
+- [x] esp32/main.ino — factory-reset warning blinks, connect double-blink, auto-heal blinks, and config-mode LED pulse all active-low
+- [x] esp32/main.ino — loop() safety action sets buzzer/LED LOW on alarm, HIGH when clear
+- [x] Settings.jsx — Buzzer/LED pinout rows updated to "Active Low" modes
+- [x] wiring-diagram.html — Buzzer/LED rows + SVG labels + power note updated for active-low relay operation
+
 ### Verification
 - [x] Frontend `npx vite build` PASSED (1725 modules, built in ~4.4s)
 - [x] Backend `node --check server.js` PASSED
 - [x] Dashboard header verified ("Monitoring 8 active sensors and 6 controllers.")
 - [x] Manual/Automated split verified in Dashboard.jsx
 - [x] bulb3/bulb4 verified in all layers (UI, backend seed, firmware)
+- [x] All PIN_LED/PIN_BUZZER references in main.ino verified consistent with active-low relay logic
 
 ### ⚠️ Notes
 - ESP32 firmware changes were NOT compile-verified with arduino-cli (not available). Review main.ino before flashing.

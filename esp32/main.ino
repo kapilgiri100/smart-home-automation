@@ -24,9 +24,9 @@
  *   - HC-SR04 Ultrasonic (Water level):
  *     - Trig Pin             -> Pin D25
  *     - Echo Pin             -> Pin D26
- * - Warning & Alarm Peripherals:
- *   - Active Buzzer            -> Pin D27
- *   - Red Alarm Warning LED    -> Pin D14
+ * - Warning & Alarm Peripherals (driven through relay module, active-low):
+ *   - Active Buzzer Relay      -> Pin D27 (LOW = buzzer ON)
+ *   - Red Alarm Warning LED Relay -> Pin D14 (LOW = LED ON)
  */
 
 #include <WiFi.h>
@@ -341,11 +341,12 @@ void setup() {
   digitalWrite(RELAY_WATER_PUMP, HIGH);
   digitalWrite(RELAY_FIRE_PUMP, HIGH);
 
-  // Initialize warning & alarm peripherals
+  // Initialize warning & alarm peripherals (active-low relay module):
+  // HIGH = relay de-energized (OFF), LOW = relay energized (ON)
   pinMode(PIN_LED, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
-  digitalWrite(PIN_LED, LOW);
-  digitalWrite(PIN_BUZZER, LOW);
+  digitalWrite(PIN_LED, HIGH);   // LED relay OFF
+  digitalWrite(PIN_BUZZER, HIGH); // Buzzer relay OFF
 
   // Initialize switches with pullups
   pinMode(SWITCH_LIGHT, INPUT_PULLUP);
@@ -372,11 +373,11 @@ void setup() {
     preferences.clear();
     preferences.end();
     
-    // Quick warning blinks
+    // Quick warning blinks (active-low relay: LOW = LED ON)
     for (int i = 0; i < 15; i++) {
-      digitalWrite(PIN_LED, HIGH);
-      delay(80);
       digitalWrite(PIN_LED, LOW);
+      delay(80);
+      digitalWrite(PIN_LED, HIGH);
       delay(80);
     }
   }
@@ -404,11 +405,11 @@ void setup() {
     inConfigMode = true;
     startCaptivePortal();
   } else {
-    // Normal connection visual signal (slow double blink)
-    digitalWrite(PIN_LED, HIGH); delay(200);
-    digitalWrite(PIN_LED, LOW);  delay(100);
-    digitalWrite(PIN_LED, HIGH); delay(200);
-    digitalWrite(PIN_LED, LOW);
+    // Normal connection visual signal (slow double blink, active-low: LOW = LED ON)
+    digitalWrite(PIN_LED, LOW); delay(200);
+    digitalWrite(PIN_LED, HIGH); delay(100);
+    digitalWrite(PIN_LED, LOW); delay(200);
+    digitalWrite(PIN_LED, HIGH);
   }
 }
 
@@ -445,7 +446,7 @@ void loop() {
     dnsServer.processNextRequest();
     webServer.handleClient();
     
-    // Config Mode indicator: Slow pulsing on status LED
+    // Config Mode indicator: Slow pulsing on status LED (active-low: LOW = LED ON)
     static unsigned long lastFlash = 0;
     if (millis() - lastFlash > 1000) {
       lastFlash = millis();
@@ -463,10 +464,10 @@ void loop() {
         WiFi.mode(WIFI_STA);         // Switch back to station-only mode
         inConfigMode = false;
         
-        // Clear background timer and flash success sequence (3 quick blinks)
+        // Clear background timer and flash success sequence (3 quick blinks, active-low: LOW = LED ON)
         for (int i = 0; i < 3; i++) {
-          digitalWrite(PIN_LED, HIGH); delay(100);
           digitalWrite(PIN_LED, LOW); delay(100);
+          digitalWrite(PIN_LED, HIGH); delay(100);
         }
         return;
       } else {
@@ -624,16 +625,17 @@ void loop() {
   bool gasLeakage = gasWarmupComplete && (gasValue > 1500); // Threshold: >1500 ADC (out of 4095 with 11dB attenuation)
 
   // 3. Hardware Safety Actions (Autonomous buzzer & alarm)
-  // Activated by local physical sensors or server-side overrides, ONLY if the sensor is available
+  // Activated by local physical sensors or server-side overrides, ONLY if the sensor is available.
+  // Buzzer/LED are connected through a relay module (active-low): LOW = relay energized = ON.
   bool fireActive = fireAvail && (fireDetected || serverFireStatus);
   bool gasActive = gasAvail && (gasLeakage || serverGasStatus);
 
   if (fireActive || gasActive) {
-    digitalWrite(PIN_BUZZER, HIGH);
-    digitalWrite(PIN_LED, HIGH);
+    digitalWrite(PIN_BUZZER, LOW);  // Buzzer relay ON (alarm sounding)
+    digitalWrite(PIN_LED, LOW);     // Warning LED relay ON
   } else {
-    digitalWrite(PIN_BUZZER, LOW);
-    digitalWrite(PIN_LED, LOW);
+    digitalWrite(PIN_BUZZER, HIGH); // Buzzer relay OFF
+    digitalWrite(PIN_LED, HIGH);    // Warning LED relay OFF
   }
 
   // Dual-Pump Control: Autonomous & remote-triggered Fire Suppression Pump 2

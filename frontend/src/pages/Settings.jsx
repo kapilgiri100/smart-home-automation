@@ -200,13 +200,13 @@ export const Settings = () => {
     gpio: "GPIO 26",
     mode: "INPUT"
   }, {
-    peripheral: "Active Buzzer (Alarm)",
+    peripheral: "Active Buzzer Relay (Alarm)",
     gpio: "GPIO 27",
-    mode: "OUTPUT (High = sound)"
+    mode: "OUTPUT (Active Low = sound)"
   }, {
-    peripheral: "Warning Indicator LED",
+    peripheral: "Warning Indicator LED Relay",
     gpio: "GPIO 14",
-    mode: "OUTPUT (High = lit)"
+    mode: "OUTPUT (Active Low = lit)"
   }];
   return <div className="space-y-8 max-w-4xl">
       {/* Page Title */}

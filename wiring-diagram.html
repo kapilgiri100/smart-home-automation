@@ -147,16 +147,16 @@
       <path class="wire wire-purple" d="M382 366 C 300 366, 300 396, 160 396" />
       <path class="wire wire-purple" d="M382 398 C 300 398, 300 436, 160 436" />
 
-      <!-- Buzzer -->
+      <!-- Buzzer (via relay, active-low) -->
       <rect class="component" x="60" y="530" width="150" height="50" fill="#1e293b" stroke="#f87171" rx="8" />
-      <text x="135" y="552" text-anchor="middle" class="comp-label" fill="#f87171" font-weight="700">🔔 ACTIVE BUZZER</text>
-      <text x="135" y="570" text-anchor="middle" class="comp-label" fill="#94a3b8">D27</text>
+      <text x="135" y="552" text-anchor="middle" class="comp-label" fill="#f87171" font-weight="700">🔔 BUZZER RELAY</text>
+      <text x="135" y="570" text-anchor="middle" class="comp-label" fill="#94a3b8">D27 (LOW = ON)</text>
       <path class="wire wire-red" d="M382 430 C 300 430, 300 555, 215 555" />
 
-      <!-- Warning LED -->
+      <!-- Warning LED (via relay, active-low) -->
       <rect class="component" x="240" y="530" width="130" height="50" fill="#1e293b" stroke="#fbbf24" rx="8" />
-      <text x="305" y="552" text-anchor="middle" class="comp-label" fill="#fbbf24" font-weight="700">💡 WARN LED</text>
-      <text x="305" y="570" text-anchor="middle" class="comp-label" fill="#94a3b8">D14</text>
+      <text x="305" y="552" text-anchor="middle" class="comp-label" fill="#fbbf24" font-weight="700">💡 LED RELAY</text>
+      <text x="305" y="570" text-anchor="middle" class="comp-label" fill="#94a3b8">D14 (LOW = ON)</text>
       <path class="wire wire-amber" d="M382 462 C 330 462, 330 555, 310 555" />
 
       <!-- ===== RIGHT SIDE: SWITCHES + SENSORS ===== -->
@@ -232,8 +232,8 @@
         <tr><td>Flame Sensor (Digital)</td><td class="code" style="color:#22d3ee;">GPIO 35</td><td>INPUT (Active High = fire)</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
         <tr><td>HC-SR04 Ultrasonic — TRIG</td><td class="code" style="color:#22d3ee;">GPIO 25</td><td>OUTPUT</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
         <tr><td>HC-SR04 Ultrasonic — ECHO</td><td class="code" style="color:#22d3ee;">GPIO 26</td><td>INPUT</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
-        <tr><td>Active Buzzer (Alarm)</td><td class="code" style="color:#f87171;">GPIO 27</td><td>OUTPUT (High = sound)</td><td><span class="badge badge-safety">Safety</span></td></tr>
-        <tr><td>Warning Indicator LED</td><td class="code" style="color:#f87171;">GPIO 14</td><td>OUTPUT (High = lit)</td><td><span class="badge badge-safety">Safety</span></td></tr>
+        <tr><td>Active Buzzer Relay (Alarm)</td><td class="code" style="color:#f87171;">GPIO 27</td><td>OUTPUT (Active Low = sound)</td><td><span class="badge badge-safety">Safety</span></td></tr>
+        <tr><td>Warning Indicator LED Relay</td><td class="code" style="color:#f87171;">GPIO 14</td><td>OUTPUT (Active Low = lit)</td><td><span class="badge badge-safety">Safety</span></td></tr>
       </tbody>
     </table>
   </div>
@@ -247,7 +247,7 @@
       <div class="pin-row"><span class="pin-name">Relay Module VCC</span><span class="pin-mode">5V (JD-VCC with optocoupler jumpers)</span></div>
       <div class="pin-row"><span class="pin-name">Relay Module GND</span><span class="pin-mode">Common GND with ESP32</span></div>
       <div class="pin-row"><span class="pin-name">Sensors VCC</span><span class="pin-mode">3.3V (Flame, MQ-2, HC-SR04)</span></div>
-      <div class="pin-row"><span class="pin-name">Buzzer / LED</span><span class="pin-mode">3.3V logic, GND common</span></div>
+      <div class="pin-row"><span class="pin-name">Buzzer / LED relays</span><span class="pin-mode">Active-low via relay module (LOW = operate)</span></div>
       <div class="pin-row"><span class="pin-name">AC Loads (230V)</span><span class="pin-mode">Through relay COM / NO terminals only</span></div>
     </div>
     <div class="card">
