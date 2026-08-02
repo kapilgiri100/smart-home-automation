@@ -1,29 +1,61 @@
-# Dashboard UI - Separate Manual & Automated Appliances
+# Smart Home Automation - Task List
 
-## Problem
+## ✅ COMPLETED: Dashboard UI - Separate Manual & Automated Appliances
+
+### Problem
 All appliances were displayed in a single grid, mixing manual and automated appliances together.
 
-## Solution
-- **Manual Appliances section**: Light Bulb 1, Light Bulb 2, Light Bulb 3, Light Bulb 4 (2x2 grid) — all clickable/toggleable
-- **Automated Active section**: Overhead Fill Pump, Fire Extinguisher Pump with "Auto" badges — all clickable/toggleable
-- **Auto badges** shown on the 2 automated pumps to identify them
+### Solution
+Split the appliances section into two distinct blocks:
+- **Manual Appliances** (Light Bulb 1, 2, 3, 4) - user-controlled, clickable
+- **Automated Appliances** (Overhead Fill Pump, Fire Extinguisher Pump) - system-controlled with "Auto" badges
 
-## Implementation Steps
+### Implementation Steps - ALL COMPLETED ✅
 
-### Step 1: backend/server.js
-- [x] Added Light Bulb 3 (bulb3) and Light Bulb 4 (bulb4) to DB seed defaults
+#### Step 1: frontend/src/pages/Dashboard.jsx
+- [x] Replaced the single appliances grid with two separate blocks
+- [x] Manual Appliances block (4 light bulbs) in 2x2 grid - blue theme
+- [x] Automated Appliances block (2 pumps) in 2x2 grid with "Auto" badges - amber theme
+- [x] Added Light Bulb 3 (bulb3) & Light Bulb 4 (bulb4) to state
+- [x] Added bulb3/bulb4 to simPhysicalSwitches
+- [x] Added bulb3/bulb4 icons in getApplianceIcon
+- [x] Header updated to "Monitoring 8 active sensors and 6 controllers."
+- [x] Manual section subtitle: "Four light bulb switch control system"
+- [x] All toggle, rename, and real-time sync functionality preserved
 
-### Step 2: frontend/src/pages/Dashboard.jsx
-- [x] **Manual Appliances** section: Light Bulb 1, Light Bulb 2, Light Bulb 3, Light Bulb 4 (2x2 grid, blue theme)
-- [x] **Automated Active** section: Overhead Fill Pump, Fire Extinguisher Pump (2x2 grid, amber theme, "Auto" badges)
-- [x] All toggle, rename, and real-time sync functionality intact
+#### Step 2: backend/server.js
+- [x] Added bulb3/bulb4 to DB seed defaults
+- [x] Secondary-table pump-status sync added to `/api/device/update` handler (tv→waterTank.pumpStatus, socket→sensors.firePumpStatus)
+- [x] Secondary-table pump-status sync added to Socket.IO `device-sensor-update` handler
+- [x] Syntax check passed (node --check)
 
-### Step 3: Wiring Diagram & Pinout Correction
-- [x] Created `wiring-diagram.html` — full interactive SVG wiring diagram of the system
-- [x] Corrected pinout table in `frontend/src/pages/Settings.jsx` to match actual firmware:
-  - Relays: Light Bulb 1→D18, Light Bulb 2→D19, Bulb 3→D32, Bulb 4→D33, Fill Pump→D21, Fire Pump→D22
-  - Physical switches: Light→D4, Fan→D5, Fill Pump→D12, Fire Pump→D13
-  - Sensors: Flame→D35, MQ-2→D34, HC-SR04 Trig→D25, Echo→D26
-  - Safety: Buzzer→D27, LED→D14
-- [x] Frontend production build verified (vite build ✓)
+#### Step 3: esp32/main.ino - ESP32 Firmware
+- [x] Added RELAY_BULB3 (GPIO 32) & RELAY_BULB4 (GPIO 33) for light bulb control
+- [x] Added SWITCH_BULB3 (GPIO 16) & SWITCH_BULB4 (GPIO 17) physical switches
+- [x] JSON payload + response parsing include bulb3/bulb4
+- [x] Fire-pump manual control restored (no longer force-off each loop)
+- [x] Pump state sync across secondary tables
+- [x] `getWaterLevelPercentage()` returns -1 on echo timeout
+- [x] Pump logic skips auto-fill on -1 and force-turns fill pump OFF on sensor failure (overflow safety)
+- [x] waterLevel sent as 50 instead of -1 on failure
+- [x] Header comments/pin docs corrected (pumps are D21/D22)
+
+#### Step 4: frontend/src/pages/Settings.jsx
+- [x] Pinout table corrected to match firmware
+- [x] Added GPIO 16/17 switch rows for Light Bulb 3 & 4
+
+#### Step 5: wiring-diagram.html
+- [x] Created (SVG ESP32 diagram, pinout table, power/relay notes, AC-safety warning)
+- [x] Updated D16/D17 switch pins in board diagram
+- [x] Added GPIO 16/17 rows to pinout table
+
+### Verification
+- [x] Frontend `npx vite build` PASSED (1725 modules, built in ~4.4s)
+- [x] Backend `node --check server.js` PASSED
+- [x] Dashboard header verified ("Monitoring 8 active sensors and 6 controllers.")
+- [x] Manual/Automated split verified in Dashboard.jsx
+- [x] bulb3/bulb4 verified in all layers (UI, backend seed, firmware)
+
+### ⚠️ Notes
+- ESP32 firmware changes were NOT compile-verified with arduino-cli (not available). Review main.ino before flashing.
 

@@ -4,16 +4,20 @@
  * ESP32 Firmware (main.ino)
  * 
  * Hardware components and ESP32 Pin Connections:
- * - 4-Channel Relay Module (Appliances: Light, Fan, TV, Smart Socket):
- *   - Relay 1 (Light)        -> Pin D18
- *   - Relay 2 (Fan)          -> Pin D19
- *   - Relay 3 (TV)           -> Pin D21
- *   - Relay 4 (Smart Socket) -> Pin D22
- * - 4 Physical Switches:
- *   - Switch 1 (Light)        -> Pin D4  (Internal Pullup)
- *   - Switch 2 (Fan)          -> Pin D5  (Internal Pullup)
- *   - Switch 3 (TV)           -> Pin D12 (Internal Pullup)
- *   - Switch 4 (Smart Socket) -> Pin D13 (Internal Pullup)
+ * - 6-Channel Relay Module (4 Light Bulbs + 2 Pumps):
+ *   - Relay 1 (Light Bulb 1)          -> Pin D18
+ *   - Relay 2 (Light Bulb 2)          -> Pin D19
+ *   - Relay 3 (Light Bulb 3)          -> Pin D32 (expansion)
+ *   - Relay 4 (Light Bulb 4)          -> Pin D33 (expansion)
+ *   - Relay 5 (Overhead Fill Pump)    -> Pin D21 (Automated)
+ *   - Relay 6 (Fire Extinguisher Pump)-> Pin D22 (Automated)
+ * - 6 Physical Switches:
+ *   - Switch 1 (Light Bulb 1)        -> Pin D4  (Internal Pullup)
+ *   - Switch 2 (Light Bulb 2)        -> Pin D5  (Internal Pullup)
+ *   - Switch 3 (Overhead Fill Pump)  -> Pin D12 (Internal Pullup)
+ *   - Switch 4 (Fire Extinguisher Pump) -> Pin D13 (Internal Pullup)
+ *   - Switch 5 (Light Bulb 3)        -> Pin D16 (Internal Pullup, expansion)
+ *   - Switch 6 (Light Bulb 4)        -> Pin D17 (Internal Pullup, expansion)
  * - Sensors:
  *   - MQ-2 Gas Sensor        -> Pin D34 (Analog input or Digital input)
  *   - Flame Sensor           -> Pin D35 (Digital input)
@@ -23,8 +27,6 @@
  * - Warning & Alarm Peripherals:
  *   - Active Buzzer            -> Pin D27
  *   - Red Alarm Warning LED    -> Pin D14
- *   - Overhead Water Pump      -> Pin D32 (Pump 1: Water Tank Filling)
- *   - Fire Extinguisher Pump   -> Pin D33 (Pump 2: Emergency Fire Suppression)
  */
 
 #include <WiFi.h>
@@ -73,13 +75,17 @@ void scanLocalNetworks() {
 }
 
 // Hardware Pin Definitions
-#define RELAY_LIGHT       18  // Relay 1: Bulb 1
-#define RELAY_FAN         19  // Relay 2: Bulb 2
-#define RELAY_WATER_PUMP  21  // Relay 3: Water Pump 1 (Overhead Tank Fill Pump)
-#define RELAY_FIRE_PUMP   22  // Relay 4: Water Pump 2 (Emergency Fire Pump)
+#define RELAY_LIGHT       18  // Relay 1: Light Bulb 1
+#define RELAY_FAN         19  // Relay 2: Light Bulb 2
+#define RELAY_BULB3       32  // Relay 3: Light Bulb 3 (expansion)
+#define RELAY_BULB4       33  // Relay 4: Light Bulb 4 (expansion)
+#define RELAY_WATER_PUMP  21  // Relay 5: Overhead Fill Pump (Automated)
+#define RELAY_FIRE_PUMP   22  // Relay 6: Fire Extinguisher Pump (Automated)
 
 #define SWITCH_LIGHT  4
 #define SWITCH_FAN    5
+#define SWITCH_BULB3  16
+#define SWITCH_BULB4  17
 #define SWITCH_TV     12
 #define SWITCH_SOCKET 13
 
@@ -102,6 +108,8 @@ bool lastSwitchLightState = HIGH;
 bool lastSwitchFanState = HIGH;
 bool lastSwitchTvState = HIGH;
 bool lastSwitchSocketState = HIGH;
+bool lastSwitchBulb3State = HIGH;
+bool lastSwitchBulb4State = HIGH;
 
 // Debounce: timestamps for when each switch was pressed, flags to prevent multiple toggles
 const unsigned long DEBOUNCE_DELAY = 300; // 300ms debounce window
@@ -109,15 +117,21 @@ unsigned long debounceLightTime = 0;
 unsigned long debounceFanTime = 0;
 unsigned long debounceTvTime = 0;
 unsigned long debounceSocketTime = 0;
+unsigned long debounceBulb3Time = 0;
+unsigned long debounceBulb4Time = 0;
 bool switchLightPressed = false;
 bool switchFanPressed = false;
 bool switchTvPressed = false;
 bool switchSocketPressed = false;
+bool switchBulb3Pressed = false;
+bool switchBulb4Pressed = false;
 
 bool lightState = false;
 bool fanState = false;
 bool tvState = false;
 bool socketState = false;
+bool bulb3State = false;
+bool bulb4State = false;
 
 // Server-side safety overrides to ring physical buzzer if triggered via web
 bool serverFireStatus = false;
@@ -315,11 +329,15 @@ void setup() {
   // Initialize Relays as outputs and set to active-low (high-impedance/OFF default)
   pinMode(RELAY_LIGHT, OUTPUT);
   pinMode(RELAY_FAN, OUTPUT);
+  pinMode(RELAY_BULB3, OUTPUT);
+  pinMode(RELAY_BULB4, OUTPUT);
   pinMode(RELAY_WATER_PUMP, OUTPUT);
   pinMode(RELAY_FIRE_PUMP, OUTPUT);
   
   digitalWrite(RELAY_LIGHT, HIGH);  // HIGH = relay OFF for active-low modules
   digitalWrite(RELAY_FAN, HIGH);
+  digitalWrite(RELAY_BULB3, HIGH);
+  digitalWrite(RELAY_BULB4, HIGH);
   digitalWrite(RELAY_WATER_PUMP, HIGH);
   digitalWrite(RELAY_FIRE_PUMP, HIGH);
 
@@ -332,6 +350,8 @@ void setup() {
   // Initialize switches with pullups
   pinMode(SWITCH_LIGHT, INPUT_PULLUP);
   pinMode(SWITCH_FAN, INPUT_PULLUP);
+  pinMode(SWITCH_BULB3, INPUT_PULLUP);
+  pinMode(SWITCH_BULB4, INPUT_PULLUP);
   pinMode(SWITCH_TV, INPUT_PULLUP);
   pinMode(SWITCH_SOCKET, INPUT_PULLUP);
 
@@ -393,6 +413,8 @@ void setup() {
 }
 
 // Function to measure water tank level percentage
+// Returns -1 if the ultrasonic sensor read fails (no echo), so the pump logic
+// can safely skip auto-fill instead of falsely triggering on 0%.
 int getWaterLevelPercentage() {
   digitalWrite(US_TRIG, LOW);
   delayMicroseconds(2);
@@ -401,7 +423,7 @@ int getWaterLevelPercentage() {
   digitalWrite(US_TRIG, LOW);
 
   long duration = pulseIn(US_ECHO, HIGH, 30000); // 30ms timeout to prevent hanging
-  if (duration == 0) return 0;
+  if (duration == 0) return -1;  // No echo received — sensor failure/out-of-range
   
   // Calculate distance in cm
   float distance = duration * 0.034 / 2;
@@ -474,6 +496,8 @@ void loop() {
   // 1. Read Physical Switches & Detect Changes (Toggle action)
   bool switchLight = digitalRead(SWITCH_LIGHT);
   bool switchFan = digitalRead(SWITCH_FAN);
+  bool switchBulb3 = digitalRead(SWITCH_BULB3);
+  bool switchBulb4 = digitalRead(SWITCH_BULB4);
   bool switchTv = digitalRead(SWITCH_TV);
   bool switchSocket = digitalRead(SWITCH_SOCKET);
 
@@ -512,6 +536,40 @@ void loop() {
     if (switchFanPressed) {
       switchFanPressed = false;
       debounceFanTime = now;
+    }
+  }
+
+  // --- Bulb 3 Switch (Debounced) ---
+  if (switchBulb3 == LOW) {
+    if (!switchBulb3Pressed && (now - debounceBulb3Time > DEBOUNCE_DELAY)) {
+      switchBulb3Pressed = true;
+      debounceBulb3Time = now;
+      bulb3State = !bulb3State;
+      digitalWrite(RELAY_BULB3, bulb3State ? LOW : HIGH);
+      stateChanged = true;
+      Serial.println("Physical Switch: Light Bulb 3 Toggled!");
+    }
+  } else {
+    if (switchBulb3Pressed) {
+      switchBulb3Pressed = false;
+      debounceBulb3Time = now;
+    }
+  }
+
+  // --- Bulb 4 Switch (Debounced) ---
+  if (switchBulb4 == LOW) {
+    if (!switchBulb4Pressed && (now - debounceBulb4Time > DEBOUNCE_DELAY)) {
+      switchBulb4Pressed = true;
+      debounceBulb4Time = now;
+      bulb4State = !bulb4State;
+      digitalWrite(RELAY_BULB4, bulb4State ? LOW : HIGH);
+      stateChanged = true;
+      Serial.println("Physical Switch: Light Bulb 4 Toggled!");
+    }
+  } else {
+    if (switchBulb4Pressed) {
+      switchBulb4Pressed = false;
+      debounceBulb4Time = now;
     }
   }
 
@@ -579,26 +637,40 @@ void loop() {
   }
 
   // Dual-Pump Control: Autonomous & remote-triggered Fire Suppression Pump 2
+  // NOTE: We only force the pump ON when fire is active. When no fire, we do NOT
+  // force it OFF — this allows manual control (physical switch or web toggle) to
+  // turn the pump ON/OFF freely for testing. The physical switch logic above
+  // manages manual ON/OFF via socketState.
   if (fireAvail) {
     if (fireDetected || serverFireStatus || serverFirePumpStatus) {
       digitalWrite(RELAY_FIRE_PUMP, LOW);  // Turn ON Fire Suppression Pump (Active Low)
       socketState = true;
-    } else {
+    } else if (!socketState) {
+      // Only force OFF if the physical switch did NOT explicitly turn it on
       digitalWrite(RELAY_FIRE_PUMP, HIGH); // Turn OFF Fire Suppression Pump (Active Low)
-      socketState = false;
     }
   }
 
   // 4. Calculate Water Tank Percentage
   int waterLevel = getWaterLevelPercentage();
+  bool waterSensorValid = (waterLevel >= 0);  // -1 means sensor read failed
 
-// Local physical autonomous safeguard with hysteresis:
+  // Local physical autonomous safeguard with hysteresis:
   // - When pump is OFF: turn ON only when water level drops to 20% or below
   // - When pump is ON:  turn OFF only when water level reaches 80% or above
   // This creates a natural deadband preventing rapid ON/OFF toggling
   // when water level fluctuates near the thresholds.
+  // NOTE: Auto-fill is SKIPPED entirely if the ultrasonic sensor read fails
+  // (waterSensorValid == false) to prevent false pump activation on 0%.
   if (sonicAvail) {
-    if (tvState) {
+    if (!waterSensorValid) {
+      // SAFETY: Ultrasonic sensor read failed — turn OFF the fill pump to
+      // prevent indefinite running / water overflow (we cannot trust readings).
+      if (tvState) {
+        digitalWrite(RELAY_WATER_PUMP, HIGH); // Turn OFF overhead fill pump (Active Low)
+        tvState = false;
+      }
+    } else if (tvState) {
       // Pump is currently ON — only turn OFF when tank is sufficiently full
       if (waterLevel >= 80) {
         digitalWrite(RELAY_WATER_PUMP, HIGH); // Turn OFF overhead fill pump (Active Low)
@@ -635,13 +707,18 @@ void loop() {
         http.addHeader("Content-Type", "application/json");
 
         // Construct JSON payload
+        // If ultrasonic sensor read failed (waterLevel == -1), report 50% to
+        // the backend as a neutral safe value so no false pump trigger occurs.
+        int reportedWaterLevel = (waterLevel >= 0) ? waterLevel : 50;
         String payload = "{\"fireStatus\":" + String(fireDetected ? "true" : "false") +
                          ",\"gasStatus\":" + String(gasLeakage ? "true" : "false") +
-                         ",\"waterLevel\":" + String(waterLevel) +
+                         ",\"waterLevel\":" + String(reportedWaterLevel) +
                          ",\"isPhysicalToggle\":" + String(stateChanged ? "true" : "false") +
                          ",\"appliancesState\":{" +
                          "\"light\":" + String(lightState ? "true" : "false") + "," +
                          "\"fan\":" + String(fanState ? "true" : "false") + "," +
+                         "\"bulb3\":" + String(bulb3State ? "true" : "false") + "," +
+                         "\"bulb4\":" + String(bulb4State ? "true" : "false") + "," +
                          "\"tv\":" + String(tvState ? "true" : "false") + "," +
                          "\"socket\":" + String(socketState ? "true" : "false") +
                          "}}";
@@ -668,6 +745,22 @@ void loop() {
           } else if (response.indexOf("\"fan\":false") != -1) {
             fanState = false;
             digitalWrite(RELAY_FAN, HIGH);
+          }
+
+          if (response.indexOf("\"bulb3\":true") != -1) {
+            bulb3State = true;
+            digitalWrite(RELAY_BULB3, LOW);
+          } else if (response.indexOf("\"bulb3\":false") != -1) {
+            bulb3State = false;
+            digitalWrite(RELAY_BULB3, HIGH);
+          }
+
+          if (response.indexOf("\"bulb4\":true") != -1) {
+            bulb4State = true;
+            digitalWrite(RELAY_BULB4, LOW);
+          } else if (response.indexOf("\"bulb4\":false") != -1) {
+            bulb4State = false;
+            digitalWrite(RELAY_BULB4, HIGH);
           }
 
           if (response.indexOf("\"tv\":true") != -1) {

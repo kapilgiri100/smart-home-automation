@@ -176,6 +176,14 @@ export const Settings = () => {
     gpio: "GPIO 13",
     mode: "INPUT (Internal Pullup)"
   }, {
+    peripheral: "Physical Switch 5 — Light Bulb 3 (expansion)",
+    gpio: "GPIO 16",
+    mode: "INPUT (Internal Pullup)"
+  }, {
+    peripheral: "Physical Switch 6 — Light Bulb 4 (expansion)",
+    gpio: "GPIO 17",
+    mode: "INPUT (Internal Pullup)"
+  }, {
     peripheral: "Flame Sensor (Digital)",
     gpio: "GPIO 35",
     mode: "INPUT (Active High = fire)"

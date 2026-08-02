@@ -702,6 +702,24 @@ app.post("/api/device/update", async (req, res) => {
               id: key,
               status: value
             });
+
+            // Sync secondary relational tables so the water widget & fire pump
+            // status stay in perfect harmony with the physical switch.
+            if (key === "tv") {
+              await db.update(waterTank).set({
+                pumpStatus: value,
+                updatedAt: new Date()
+              }).where(eq(waterTank.id, 1));
+              const updatedWater = await db.select().from(waterTank).where(eq(waterTank.id, 1)).limit(1);
+              io.emit("water-updated", updatedWater[0]);
+            } else if (key === "socket") {
+              await db.update(sensors).set({
+                firePumpStatus: value,
+                updatedAt: new Date()
+              }).where(eq(sensors.id, 1));
+              const updatedSensors = await db.select().from(sensors).where(eq(sensors.id, 1)).limit(1);
+              io.emit("sensors-updated", updatedSensors[0]);
+            }
           }
         }
       }
@@ -990,6 +1008,24 @@ io.on("connection", socket => {
                 id: key,
                 status: value
               });
+
+              // Sync secondary relational tables so the water widget & fire pump
+              // status stay in perfect harmony with the physical switch.
+              if (key === "tv") {
+                await db.update(waterTank).set({
+                  pumpStatus: value,
+                  updatedAt: new Date()
+                }).where(eq(waterTank.id, 1));
+                const updatedWater = await db.select().from(waterTank).where(eq(waterTank.id, 1)).limit(1);
+                io.emit("water-updated", updatedWater[0]);
+              } else if (key === "socket") {
+                await db.update(sensors).set({
+                  firePumpStatus: value,
+                  updatedAt: new Date()
+                }).where(eq(sensors.id, 1));
+                const updatedSensors = await db.select().from(sensors).where(eq(sensors.id, 1)).limit(1);
+                io.emit("sensors-updated", updatedSensors[0]);
+              }
             }
           }
         }
