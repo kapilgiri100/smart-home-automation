@@ -56,6 +56,21 @@ async function addActivityLog(eventText) {
   }
 }
 
+// Tank-Full Safety Guard for the Overhead Fill Pump (id "tv")
+// When the water tank is FULL (>= 80%), the fill pump must NOT be turned ON,
+// even manually. This prevents overflow/water wastage. The stored state is
+// forced back to OFF with a logged [SAFETY] notice.
+const FILL_PUMP_SHUTOFF_LEVEL = 80;
+
+// Returns true when the tank is currently full (>= shutdown level) and the
+// requested action is to turn the fill pump ON. Used to block manual/auto ON.
+async function isFillPumpTurnOnBlocked(requestedOn) {
+  if (!requestedOn) return false; // Turning OFF is always allowed
+  const tank = await db.select().from(waterTank).where(eq(waterTank.id, 1)).limit(1);
+  const level = tank[0]?.percentage ?? 50;
+  return level >= FILL_PUMP_SHUTOFF_LEVEL;
+}
+
 // REST APIs
 // 0.1 Register - creates a new Postgres-backed account and returns a JWT
 app.post("/api/auth/register", async (req, res) => {
@@ -218,6 +233,23 @@ app.put("/api/appliances/:id", async (req, res) => {
     if (typeof status === "boolean") updateFields.status = status;
     if (typeof name === "string") updateFields.name = name;
     updateFields.updatedAt = new Date();
+
+    // Tank-Full Safety Guard: block turning the Overhead Fill Pump ON when the tank is full
+    if (id === "tv" && typeof status === "boolean" && status && await isFillPumpTurnOnBlocked(true)) {
+      await addActivityLog(`[SAFETY] Tank is FULL (${FILL_PUMP_SHUTOFF_LEVEL}%+). Overhead Fill Pump kept OFF.`);
+      io.emit("appliance-updated", {
+        id: "tv",
+        status: false
+      });
+      return res.json({
+        success: true,
+        appliance: {
+          id: "tv",
+          name: "Overhead Fill Pump",
+          status: false
+        }
+      });
+    }
 
     // Update appliance in Postgres
     await db.update(appliances).set(updateFields).where(eq(appliances.id, id));
@@ -693,6 +725,11 @@ app.post("/api/device/update", async (req, res) => {
         if (typeof value === "boolean") {
           const prevApp = await db.select().from(appliances).where(eq(appliances.id, key)).limit(1);
           if (prevApp[0] && prevApp[0].status !== value) {
+            // Tank-Full Safety Guard: never turn the fill pump ON when the tank is full
+            if (key === "tv" && value && await isFillPumpTurnOnBlocked(true)) {
+              await addActivityLog(`[SAFETY] Tank is FULL (${FILL_PUMP_SHUTOFF_LEVEL}%+). Overhead Fill Pump kept OFF.`);
+              continue;
+            }
             await db.update(appliances).set({
               status: value,
               updatedAt: new Date()
@@ -805,6 +842,16 @@ io.on("connection", socket => {
 
       // Sync relational secondary tables so they stay in perfect harmony
       if (id === "tv") {
+        // Tank-Full Safety Guard: never turn the fill pump ON when the tank is full (>= 80%)
+        if (await isFillPumpTurnOnBlocked(status)) {
+          await addActivityLog(`[SAFETY] Tank is FULL (${FILL_PUMP_SHUTOFF_LEVEL}%+). Overhead Fill Pump kept OFF.`);
+          io.emit("appliance-updated", {
+            id: "tv",
+            status: false
+          });
+          io.emit("water-updated", (await db.select().from(waterTank).where(eq(waterTank.id, 1)).limit(1))[0]);
+          return;
+        }
         await db.update(appliances).set({
           status,
           updatedAt: new Date()
@@ -999,6 +1046,11 @@ io.on("connection", socket => {
           if (typeof value === "boolean") {
             const prevApp = await db.select().from(appliances).where(eq(appliances.id, key)).limit(1);
             if (prevApp[0] && prevApp[0].status !== value) {
+              // Tank-Full Safety Guard: never turn the fill pump ON when the tank is full
+              if (key === "tv" && value && await isFillPumpTurnOnBlocked(true)) {
+                await addActivityLog(`[SAFETY] Tank is FULL (${FILL_PUMP_SHUTOFF_LEVEL}%+). Overhead Fill Pump kept OFF.`);
+                continue;
+              }
               await db.update(appliances).set({
                 status: value,
                 updatedAt: new Date()
@@ -1110,7 +1162,7 @@ async function checkSchedules() {
   try {
     const now = new Date();
     const activeSchedules = await runWithRetry(() => db.select().from(schedules).where(eq(schedules.isActive, true)));
-    for (const sched of activeSchedules) {
+for (const sched of activeSchedules) {
       // Format current UTC time into schedule's specific timezone
       const parts = new Intl.DateTimeFormat("en-US", {
         timeZone: sched.timezone || "UTC",
@@ -1127,6 +1179,11 @@ async function checkSchedules() {
         const targetStatus = sched.action === "ON";
         const appRecord = await runWithRetry(() => db.select().from(appliances).where(eq(appliances.id, sched.applianceId)).limit(1));
         if (appRecord[0] && appRecord[0].status !== targetStatus) {
+          // Tank-Full Safety Guard: a scheduled ON for the fill pump (tv) is blocked when the tank is full
+          if (sched.applianceId === "tv" && targetStatus && await isFillPumpTurnOnBlocked(true)) {
+            await addActivityLog(`[SAFETY] Scheduled ON for Overhead Fill Pump blocked — Tank is FULL (${FILL_PUMP_SHUTOFF_LEVEL}%+).`);
+            continue;
+          }
           await runWithRetry(() => db.update(appliances).set({
             status: targetStatus,
             updatedAt: new Date()

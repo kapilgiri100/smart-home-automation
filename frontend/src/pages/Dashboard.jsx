@@ -1054,6 +1054,35 @@ const [simPhysicalSwitches, setSimPhysicalSwitches] = useState({
                   </div>
                 </div>
 
+                {/* Simulated Manual Switches for Manual Appliances */}
+                <div className="p-2.5 bg-[#0A0B0D]/60 border border-white/5 rounded-xl space-y-3 mt-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">3. Manual Appliance Switches</h3>
+                    <span className="text-[9px] uppercase tracking-wider text-slate-400">Live Control</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {['light', 'fan', 'bulb3', 'bulb4'].map(key => {
+                    const isActive = simPhysicalSwitches[key];
+                    const title = {
+                      light: 'Light Bulb 1',
+                      fan: 'Light Bulb 2',
+                      bulb3: 'Light Bulb 3',
+                      bulb4: 'Light Bulb 4'
+                    }[key];
+                    return <button key={key} onClick={() => handleSimPhysicalSwitchToggle(key)} className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between gap-2 ${isActive ? 'bg-blue-600/10 border-blue-500 text-blue-200' : 'bg-[#16181D] border-white/5 text-slate-300 hover:bg-white/5'}`}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold uppercase tracking-wider">{title}</span>
+                            <span className={`h-2.5 w-2.5 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-slate-600'}`}></span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold">{isActive ? 'ON' : 'OFF'}</span>
+                            {getApplianceIcon(key, isActive)}
+                          </div>
+                        </button>;
+                  })}
+                  </div>
+                </div>
+
                 {/* Audible Siren Tester */}
                 <div className="space-y-2 pt-3 border-t border-white/5 mt-3">
                   <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">2. Audible Siren Tester</h3>

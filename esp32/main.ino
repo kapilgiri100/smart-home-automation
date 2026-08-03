@@ -752,10 +752,17 @@ void loop() {
   bool gasLeakage = gasWarmupComplete && (gasValue > 1500); // Threshold: >1500 ADC (out of 4095 with 11dB attenuation)
 
   // 3. Hardware Safety Actions (Autonomous buzzer & alarm)
-  // Activated by local physical sensors or server-side overrides, ONLY if the sensor is available.
+  // IMPORTANT FIX: The physical buzzer/LED alarm responds ONLY to the LOCAL
+  // physical sensors (fireDetected / gasLeakage), NOT to the server-latched
+  // flags. Previously serverFireStatus / serverGasStatus (echoed from the
+  // backend and possibly held TRUE by the web simulator or stale DB state)
+  // kept the buzzer ringing for a long time AFTER the flame was already gone.
+  // Now: buzzer rings while the sensor detects the hazard, and turns OFF as
+  // soon as the hazard clears locally (fireDetected clears in ~1s, gas leaks
+  // clear when the gas reading drops below the threshold).
   // Buzzer/LED are connected through a relay module (active-low): LOW = relay energized = ON.
-  bool fireActive = fireAvail && (fireDetected || serverFireStatus);
-  bool gasActive = gasAvail && (gasLeakage || serverGasStatus);
+  bool fireActive = fireAvail && fireDetected;   // Local flame sensor only
+  bool gasActive = gasAvail && gasLeakage;       // Local gas sensor only
 
   if (fireActive || gasActive) {
     digitalWrite(PIN_BUZZER, LOW);  // Buzzer relay ON (alarm sounding)
@@ -766,12 +773,12 @@ void loop() {
   }
 
   // Dual-Pump Control: Autonomous & remote-triggered Fire Suppression Pump 2
-  // NOTE: We only force the pump ON when fire is active. When no fire, we do NOT
-  // force it OFF — this allows manual control (physical switch or web toggle) to
-  // turn the pump ON/OFF freely for testing. The physical switch logic above
-  // manages manual ON/OFF via socketState.
+  // The fire pump turns ON when the LOCAL flame sensor detects fire, OR when a
+  // remote override (serverFirePumpStatus) is active. It does NOT rely on the
+  // latched serverFireStatus, so a stale/simulated web fire cannot keep the
+  // pump running after the local flame is out.
   if (fireAvail) {
-    if (fireDetected || serverFireStatus || serverFirePumpStatus) {
+    if (fireDetected || serverFirePumpStatus) {
       digitalWrite(RELAY_FIRE_PUMP, LOW);  // Turn ON Fire Suppression Pump (Active Low)
       socketState = true;
     } else if (!socketState) {
@@ -922,7 +929,9 @@ void loop() {
             serverFirePumpStatus = false;
           }
 
-          // Sync fire and gas alarm states from server response (e.g. if simulated on web)
+// Sync fire and gas alarm states from server response (e.g. if simulated on web)
+          // NOTE: These are no longer used to drive the physical buzzer/LED (which now
+          // responds only to local sensors). They are parsed for informational sync only.
           if (response.indexOf("\"fire\":true") != -1) {
             serverFireStatus = true;
           } else if (response.indexOf("\"fire\":false") != -1) {
