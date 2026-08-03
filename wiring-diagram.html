@@ -229,7 +229,7 @@
         <tr><td>Physical Switch 5 — Light Bulb 3 (expansion)</td><td class="code" style="color:#34d399;">GPIO 16</td><td>INPUT (Internal Pullup)</td><td><span class="badge badge-manual">Manual</span></td></tr>
         <tr><td>Physical Switch 6 — Light Bulb 4 (expansion)</td><td class="code" style="color:#34d399;">GPIO 17</td><td>INPUT (Internal Pullup)</td><td><span class="badge badge-manual">Manual</span></td></tr>
         <tr><td>MQ-2 Gas Sensor (Analog)</td><td class="code" style="color:#22d3ee;">GPIO 34</td><td>INPUT (Analog, 11dB atten)</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
-        <tr><td>Flame Sensor (AO, Analog)</td><td class="code" style="color:#22d3ee;">GPIO 35 (ADC1_CH7)</td><td>INPUT (Analog, flicker-filtered, rejects sunlight)</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
+        <tr><td>Flame Sensor (AO, Analog)</td><td class="code" style="color:#22d3ee;">GPIO 35 (ADC1_CH7)</td><td>INPUT (Analog, mean + peak-to-peak flicker filter, rejects sunlight)</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
         <tr><td>HC-SR04 Ultrasonic — TRIG</td><td class="code" style="color:#22d3ee;">GPIO 25</td><td>OUTPUT</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
         <tr><td>HC-SR04 Ultrasonic — ECHO</td><td class="code" style="color:#22d3ee;">GPIO 26</td><td>INPUT</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
         <tr><td>Active Buzzer Relay (Alarm)</td><td class="code" style="color:#f87171;">GPIO 27</td><td>OUTPUT (Active Low = sound)</td><td><span class="badge badge-safety">Safety</span></td></tr>
@@ -266,6 +266,10 @@
 
   <div class="note">
     💡 <strong>Note about Light Bulbs 3 &amp; 4:</strong> GPIO 32 and GPIO 33 are reserved for the two new relay channels (Light Bulb 3 &amp; 4) added to the dashboard. To activate them on the physical ESP32, add the relay pin definitions and control logic to <code>esp32/main.ino</code> (or wire them to the free relay channels of a 6-channel relay module). They work exactly like Relays 1 &amp; 2 — active-low outputs.
+  </div>
+
+  <div class="note" style="border-color: rgba(248,113,113,0.25); background: rgba(248,113,113,0.06); color: var(--red);">
+    🔥 <strong>Important — Flame Sensor AO Wiring:</strong> The firmware now reads the flame sensor's <strong>analog output (AO)</strong> pin on GPIO 35 (ADC1_CH7) to distinguish a real flickering flame from steady sunlight. Connect the flame sensor's <strong>AO</strong> pin to GPIO 35 (instead of DO). The digital output pin is no longer used for fire detection. If the sensor's AO is not brought out, add a 100k&Omega; pulldown on the AO line so the ADC reads a clean 0&ndash;3.3V signal.
   </div>
 </div>
 </body>

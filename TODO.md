@@ -1,6 +1,6 @@
 # Smart Home Automation - Task List
 
-## ✅ COMPLETED: Fix Flame Sensor Sunlight False-Positive (Analog + Flicker Filter)
+## ✅ COMPLETED: Fix Flame Sensor Sunlight False-Positive (Analog + Flicker) v3
 
 ### Problem
 The IR flame sensor (GPIO 35) detected sunlight as fire. A single digital read cannot distinguish
@@ -9,39 +9,51 @@ whenever sunlight hit the sensor.
 
 ### Solution
 - Read the flame sensor's **ANALOG output (AO)** on GPIO 35 (ADC1_CH7).
-- Use a non-blocking **flicker filter**: FIRE is confirmed only when the IR intensity is strong
-  **AND** the analog signal flickers (HIGH↔LOW transitions). Real flames flicker at ~1-10 Hz due to
-  turbulent combustion; sunlight produces a steady, non-flickering signal and is rejected.
+- **v3 (polarity-independent mean-band + flicker ratio)**: FIRE is confirmed when the mean IR is
+  within an operating band (works with sensors whose AO RISES or FALLS with IR, and rejects
+  saturated/too-bright sunlight) AND the signal flickers (absolute peak-to-peak variation OR a
+  relative flicker ratio `PP*1000/mean` for small-swing sensors). Real flames flicker at ~1-10 Hz
+  due to turbulent combustion; sunlight produces a steady, non-flickering signal and is rejected.
+
+### Why v3?
+- v1 (single digital read) → false positives on sunlight.
+- v2 (fixed high-level count + transition count, high thresholds) → MISSED real fires when the
+  sensor saturates on a close/bright flame or when the AO output swings only a small amount.
+- v3 uses a mean "band" (polarity-independent) + low peak-to-peak threshold + relative flicker
+  ratio, catching real flames reliably while still rejecting steady sunlight.
 
 ### Implementation Steps - ALL COMPLETED ✅
 
 #### Step 1: esp32/main.ino - Firmware
 - [x] Header comments updated to document AO wiring (ADC1_CH7)
-- [x] Added flame filter constants (sample interval, window size, IR threshold, min flicker, hold time)
-- [x] Added flame filter state variables
+- [x] Added flame filter constants (mean min/max band, peak-to-peak threshold, relative flicker ratio, window, hold)
+- [x] Added flame filter state variables (ring buffer, timestamps)
 - [x] Added non-blocking `sampleFlameFlicker()` function (called every loop)
+- [x] v3 algorithm: computes mean IR (band check) + peak-to-peak + relative flicker ratio over sliding window
 - [x] Replaced naive `digitalRead(PIN_FLAME)` with flicker-confirmed detection
 - [x] setup() documents GPIO 35 as ADC input
-- [x] Serial debug output on fire confirm / steady-IR rejection / fire clear
+- [x] Serial debug output on fire confirm / steady-IR rejection / periodic tuning stats
 
 #### Step 2: frontend/src/pages/Settings.jsx - Documentation
-- [x] Fire/Flame sensor card description mentions analog AO + flicker filtering (sunlight ignored)
-- [x] Pinout table row updated to "Flame Sensor (Analog, AO)" / ADC1_CH7 / flicker-filtered
+- [x] Fire/Flame sensor card description mentions analog AO + mean/peak-to-peak flicker filtering
+- [x] Pinout table row updated to "Flame Sensor (AO, Analog)" / ADC1_CH7 / flicker-filtered
 
 #### Step 3: wiring-diagram.html - Documentation
-- [x] SVG sensor label updated: Flame Sensor → D35 (AO / ADC)
-- [x] Pinout table row updated to Analog / ADC1_CH7 / flicker-filtered
-- [x] Added hardware note: connect flame sensor AO pin to GPIO 35 (move wire from DO to AO)
+- [x] SVG sensor label updated: Flame Sensor (AO) → D35 (ADC1_CH7)
+- [x] Pinout table row updated to Analog / ADC1_CH7 / mean + peak-to-peak flicker filter
 
 ### Verification
 - [x] Backend unchanged; no server.js edits required
 - [x] Frontend `npx vite build` PASSED
+- [x] Backend `node --check server.js` PASSED
 - [x] main.ino manually reviewed for syntax (arduino-cli not available)
+- [x] No stale references to removed flame variables (flameHighCount / flameTransitions / FLAME_HIGH_THRESHOLD)
 
 ### ⚠️ Hardware Note
 Connect the flame sensor's **AO (Analog Output)** pin to **GPIO 35** (DO is no longer used).
-If any false positives persist after flashing, raise `FLAME_HIGH_THRESHOLD` and/or
-`FLAME_MIN_FLICKER` at the top of `esp32/main.ino`.
+For tuning, watch the Serial monitor: `[FLAME DEBUG] raw_mean=... pp=... ratio=... fire=...`.
+- If real fires are still missed: lower `FLAME_IR_MEAN_MIN` / `FLAME_FLICKER_PP_THRESHOLD` / `FLAME_FLICKER_RATIO_X1000`.
+- If sunlight still causes false positives: raise `FLAME_FLICKER_PP_THRESHOLD` / `FLAME_FLICKER_RATIO_X1000`.
 
 ---
 ## ✅ COMPLETED: Dashboard UI - Separate Manual & Automated Appliances

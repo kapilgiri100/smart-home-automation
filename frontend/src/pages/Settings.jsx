@@ -308,7 +308,7 @@ peripheral: "Flame Sensor (AO, Analog)",
                   <div>
 <h3 className="text-xs font-bold uppercase tracking-wider text-white">Fire / Flame Sensor</h3>
                     <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                      Reads the analog AO pin (GPIO 35, ADC1_CH7). Uses a flicker filter that rejects steady sunlight — only confirms fire when the IR signal oscillates (real flame flicker).
+                      Reads the analog AO pin (GPIO 35, ADC1_CH7). Uses a mean + peak-to-peak flicker filter: confirms fire when the average IR is strong AND the signal oscillates (real flame flicker), while rejecting steady sunlight.
                     </p>
                   </div>
                 </div>

@@ -20,7 +20,7 @@
  *   - Switch 6 (Light Bulb 4)        -> Pin D17 (Internal Pullup, expansion)
  * - Sensors:
  *   - MQ-2 Gas Sensor        -> Pin D34 (Analog input or Digital input)
-*   - Flame Sensor (AO)      -> Pin D35 (Analog input, ADC1_CH7)
+ *   - Flame Sensor (AO)      -> Pin D35 (Analog input, ADC1_CH7)
  *   - HC-SR04 Ultrasonic (Water level):
  *     - Trig Pin             -> Pin D25
  *     - Echo Pin             -> Pin D26
@@ -104,7 +104,7 @@ int TANK_HEIGHT = 100; // Tank height in cm (adjustable)
 const unsigned long UPDATE_INTERVAL = 1500; // Send update every 1.5 seconds
 
 // ============================================================
-// Flame Sensor Anti-Sunlight Filter (Analog + Flicker)
+// Flame Sensor Anti-Sunlight Filter (Analog Mean + Flicker) v3
 // ------------------------------------------------------------
 // Real flames flicker due to turbulent combustion: the IR
 // intensity oscillates at roughly 1-10 Hz. Sunlight, however,
@@ -112,33 +112,49 @@ const unsigned long UPDATE_INTERVAL = 1500; // Send update every 1.5 seconds
 // digital read cannot distinguish them, causing false fire
 // alarms when sunlight hits the sensor.
 //
-// We therefore sample the sensor's ANALOG output (AO -> GPIO35,
-// ADC1_CH7) every FLAME_SAMPLE_INTERVAL_MS into a sliding window
-// of FLAME_WINDOW_SIZE samples. FIRE is confirmed only when BOTH:
-//   1. The analog IR intensity is strong (enough samples above
-//      FLAME_HIGH_THRESHOLD), AND
-//   2. The signal actually FLICKERS (>= FLAME_MIN_FLICKER
-//      HIGH<->LOW transitions within the window).
-// Once confirmed, the fire remains "active" for a further
-// FLAME_CONFIRM_MS (debounce/hold) so brief dropouts don't
-// cause alarm chattering.
+// v3 tuning (fixes "sensor not detecting fire"):
+//   - v1 (single digital read) caused false positives on sunlight.
+//   - v2 (fixed high-level count + transition count with high
+//     thresholds) MISSED fires when the sensor saturates on a
+//     close/bright flame (analog stops crossing the threshold).
+//   - v3 uses a mean "band" + low peak-to-peak + relative flicker
+//     ratio, catching real flames reliably while still rejecting
+//     steady sunlight.
+//
+// New algorithm samples the ANALOG AO pin (GPIO35, ADC1_CH7)
+// every FLAME_SAMPLE_INTERVAL_MS into a sliding window and
+// computes:
+//   1. Mean IR level   -> presence of an IR source (using a band,
+//      works with sensors whose AO rises OR falls with IR).
+//   2. Peak-to-peak    -> variation of the raw signal (flicker).
+//   3. Relative ratio  -> PP*1000/mean, catches small-swing sensors.
+// FIRE is confirmed when the mean IR is in-band AND flicker is
+// present. This catches real flames while still rejecting steady
+// sunlight (low PP).
 // ============================================================
-const int FLAME_HIGH_THRESHOLD = 600;        // ADC raw (0-4095). Above this = strong IR source (fire/sun)
-const int FLAME_MIN_HIGH_SAMPLES = 20;       // Min samples (out of window) above threshold to qualify as strong IR
-const int FLAME_MIN_FLICKER = 4;             // Min HIGH<->LOW transitions in window -> proves flicker (real flame)
-const int FLAME_WINDOW_SIZE = 50;            // ~2 seconds of samples at 40ms interval
-const unsigned long FLAME_SAMPLE_INTERVAL_MS = 40;
-const unsigned long FLAME_CONFIRM_MS = 3000; // Hold confirmed fire for 3s after last positive flicker window
+// Tuned for robustness: cheap flame-sensor AO outputs vary widely.
+// Some modules output a voltage that RISES with IR, others DROP
+// (phototransistor pulls AO low). We therefore use a mean "band"
+// (not too dark, not too bright) which works for BOTH polarities
+// and also rejects saturating sunlight by its extreme mean level.
+// Real flame is confirmed only when mean is in-band AND the signal
+// FLICKERS (peak-to-peak or relative flicker ratio).
+const int FLAME_IR_MEAN_MIN = 40;              // ADC avg below this = disconnected / pinned low (no signal)
+const int FLAME_IR_MEAN_MAX = 3900;            // ADC avg above this = pinned high / pure ambient (no signal change)
+const int FLAME_FLICKER_PP_THRESHOLD = 25;     // Absolute peak-to-peak ADC variation -> flicker (real flame)
+const int FLAME_FLICKER_RATIO_X1000 = 25;      // Relative flicker: PP*1000/mean >= this (catches small-swing flames)
+const int FLAME_WINDOW_SIZE = 30;              // Samples per evaluation window (~0.9s at 30ms) - responsive
+const unsigned long FLAME_SAMPLE_INTERVAL_MS = 30;
+const unsigned long FLAME_CONFIRM_MS = 1500;   // Hold confirmed fire for 1.5s after last positive window
+const unsigned long FLAME_DEBUG_INTERVAL_MS = 5000; // Periodic Serial debug for field tuning
 
 // Flame filter runtime state
 unsigned long lastFlameSampleTime = 0;
-int flameSamples[FLAME_WINDOW_SIZE];         // Ring buffer of recent raw analog readings
+int flameSamples[FLAME_WINDOW_SIZE];           // Ring buffer of recent raw analog readings
 int flameSampleIndex = 0;
-int flameHighCount = 0;                      // Samples above FLAME_HIGH_THRESHOLD in current window
-int flameTransitions = 0;                    // HIGH<->LOW transitions in current window
-bool flameLastHigh = false;                  // Previous sample's HIGH/LOW classification
 unsigned long lastFlameConfirmTime = 0;
-bool fireDetected = false;                   // Flicker-confirmed fire (default: no fire)
+unsigned long lastFlameDebugTime = 0;
+bool fireDetected = false;                     // Flicker-confirmed fire (default: no fire)
 
 // Last known physical states to detect local changes
 bool lastSwitchLightState = HIGH;
@@ -479,9 +495,10 @@ int getWaterLevelPercentage() {
 }
 
 // ============================================================
-// Non-blocking flame sensor flicker filter.
-// Called every loop iteration. Samples the analog AO pin into
-// a sliding window, counts transitions, and updates fireDetected.
+// Non-blocking flame sensor flicker filter v3 (mean + peak-to-peak).
+// Called every loop iteration. Samples the analog AO pin into a
+// sliding window, computes mean IR + peak-to-peak flicker, and
+// updates fireDetected.
 // ============================================================
 void sampleFlameFlicker() {
   unsigned long now = millis();
@@ -493,58 +510,85 @@ void sampleFlameFlicker() {
   // Read analog value from flame sensor AO pin (ADC1_CH7, 0-4095)
   int raw = analogRead(PIN_FLAME);
 
-  // Store in ring buffer
-  int oldVal = flameSamples[flameSampleIndex];
+  // Store in ring buffer (overwriting the oldest sample)
   flameSamples[flameSampleIndex] = raw;
   flameSampleIndex = (flameSampleIndex + 1) % FLAME_WINDOW_SIZE;
 
-  // Classify this sample as HIGH (strong IR) or LOW (weak IR)
-  bool isHigh = (raw >= FLAME_HIGH_THRESHOLD);
-
-  // Update HIGH count (add current, subtract old)
-  bool oldHigh = (oldVal >= FLAME_HIGH_THRESHOLD);
-  if (isHigh) flameHighCount++;
-  if (oldHigh) flameHighCount--;
-
-  // Track transitions using the persistent last classification:
-  // each time the HIGH/LOW state changes between consecutive samples,
-  // we increment the flicker counter (real flames oscillate; sunlight does not).
-  if (isHigh != flameLastHigh) {
-    flameTransitions++;
-    flameLastHigh = isHigh;
-  }
-
-  // When the ring buffer has wrapped at least once, we have a full window.
-  // We can now evaluate the window to confirm fire.
+  // Every time the ring buffer completes a full window, evaluate it.
   if (flameSampleIndex == 0) {
-    // The ring buffer just wrapped; we have FLAME_WINDOW_SIZE valid samples.
-    // Evaluate: strong IR (enough high samples) AND flicker (enough transitions)?
-    bool hasStrongIR = (flameHighCount >= FLAME_MIN_HIGH_SAMPLES);
-    bool hasFlicker = (flameTransitions >= FLAME_MIN_FLICKER);
+    // Compute mean IR level and peak-to-peak over the window.
+    long sum = 0;
+    int minVal = 4095;
+    int maxVal = 0;
+    for (int i = 0; i < FLAME_WINDOW_SIZE; i++) {
+      int v = flameSamples[i];
+      sum += v;
+      if (v < minVal) minVal = v;
+      if (v > maxVal) maxVal = v;
+    }
+    int mean = sum / FLAME_WINDOW_SIZE;
+    int peakToPeak = maxVal - minVal;
 
-    if (hasStrongIR && hasFlicker) {
-      // Real flame confirmed
+    // Confidence checks (polarity-independent):
+    //   - Mean IR is within an operating band: not too dark (no IR
+    //     source / very far) and not fully saturated at either rail.
+    //     This works for sensors whose AO rises OR falls with IR.
+    //   - Flicker: absolute peak-to-peak variation, OR a relative
+    //     flicker ratio (PP*1000/mean) for small-swing sensors.
+    //     A real flame flickers; steady sunlight does not.
+    bool irInBand = (mean >= FLAME_IR_MEAN_MIN) && (mean <= FLAME_IR_MEAN_MAX);
+    int flickerRatio = (mean > 0) ? (peakToPeak * 1000 / mean) : 0;
+    bool hasFlicker = (peakToPeak >= FLAME_FLICKER_PP_THRESHOLD) ||
+                      (flickerRatio >= FLAME_FLICKER_RATIO_X1000);
+
+    if (irInBand && hasFlicker) {
+      // Real flame confirmed (mean in-band AND flicker)
       lastFlameConfirmTime = now;
       if (!fireDetected) {
         fireDetected = true;
-        Serial.print("[FLAME FILTER] FIRE CONFIRMED! Strong IR=");
-        Serial.print(flameHighCount);
-        Serial.print("/");
-        Serial.print(FLAME_WINDOW_SIZE);
-        Serial.print(" samples, flicker=");
-        Serial.print(flameTransitions);
-        Serial.println(" transitions (sunlight rejected)");
+        Serial.print("[FLAME FILTER] FIRE CONFIRMED! mean=");
+        Serial.print(mean);
+        Serial.print(", PP=");
+        Serial.print(peakToPeak);
+        Serial.print(", ratio=");
+        Serial.print(flickerRatio);
+        Serial.println();
       }
-    } else if (hasStrongIR && !hasFlicker) {
-      // Strong IR but no flicker -> STEADY sunlight rejected
+    } else if (irInBand && !hasFlicker) {
+      // IR in-band but zero flicker -> steady sunlight rejected
       if (fireDetected) {
-        // Only print if we were previously in fire state (transition out)
-        Serial.println("[FLAME FILTER] Sunlight rejected (steady IR, no flicker)");
+        Serial.print("[FLAME FILTER] Sunlight rejected (steady IR, mean=");
+        Serial.print(mean);
+        Serial.print(", PP=");
+        Serial.println(peakToPeak);
       }
     }
+  }
 
-    // Reset transition counter for next window
-    flameTransitions = 0;
+  // Periodic debug (once every few seconds) for on-site tuning
+  if (now - lastFlameDebugTime >= FLAME_DEBUG_INTERVAL_MS) {
+    lastFlameDebugTime = now;
+    int latestMean = 0;
+    int latestPP = 0;
+    long s = 0;
+    int mn = 4095;
+    int mx = 0;
+    for (int i = 0; i < FLAME_WINDOW_SIZE; i++) {
+      int v = flameSamples[i];
+      s += v;
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    latestMean = s / FLAME_WINDOW_SIZE;
+    latestPP = mx - mn;
+    Serial.print("[FLAME DEBUG] raw_mean=");
+    Serial.print(latestMean);
+    Serial.print(" pp=");
+    Serial.print(latestPP);
+    Serial.print(" ratio=");
+    Serial.print(latestMean > 0 ? (latestPP * 1000 / latestMean) : 0);
+    Serial.print(" fire=");
+    Serial.println(fireDetected ? "YES" : "no");
   }
 
   // Apply hold time: once confirmed, fire stays active for FLAME_CONFIRM_MS
