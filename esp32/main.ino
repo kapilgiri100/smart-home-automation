@@ -2,7 +2,7 @@
  * IoT-Based Smart Home Automation and Fire & Gas Safety Monitoring System
  * Final Year Computer Engineering Project
  * ESP32 Firmware (main.ino)
- * 
+ *
  * Hardware components and ESP32 Pin Connections:
  * - 6-Channel Relay Module (4 Light Bulbs + 2 Pumps):
  *   - Relay 1 (Light Bulb 1)          -> Pin D18
@@ -11,7 +11,7 @@
  *   - Relay 4 (Light Bulb 4)          -> Pin D33 (expansion)
  *   - Relay 5 (Overhead Fill Pump)    -> Pin D21 (Automated)
  *   - Relay 6 (Fire Extinguisher Pump)-> Pin D22 (Automated)
-* - 4 Physical Switches (manual control ONLY for the four light bulbs):
+ * - 4 Physical Switches (manual control ONLY for the four light bulbs):
  *   - Switch 1 (Light Bulb 1)        -> Pin D4  (Internal Pullup)
  *   - Switch 2 (Light Bulb 2)        -> Pin D5  (Internal Pullup)
  *   - Switch 3 (Light Bulb 3)        -> Pin D16 (Internal Pullup, expansion)
@@ -49,7 +49,8 @@ String savedServerUrl = "https://YOUR-APPLET-URL.run.app/api/device/update"; // 
 bool inConfigMode = false;
 
 // Pre-scanned networks for faster configuration portal page loading
-struct ScannedNetwork {
+struct ScannedNetwork
+{
   String ssid;
   int rssi;
 };
@@ -57,16 +58,18 @@ struct ScannedNetwork {
 ScannedNetwork scannedNetworks[MAX_SCANNED_NETWORKS];
 int numScannedNetworks = 0;
 
-void scanLocalNetworks() {
+void scanLocalNetworks()
+{
   Serial.println("Pre-scanning available WiFi networks...");
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   delay(100);
-  
+
   int n = WiFi.scanNetworks();
   numScannedNetworks = (n > MAX_SCANNED_NETWORKS) ? MAX_SCANNED_NETWORKS : n;
-  
-  for (int i = 0; i < numScannedNetworks; ++i) {
+
+  for (int i = 0; i < numScannedNetworks; ++i)
+  {
     scannedNetworks[i].ssid = WiFi.SSID(i);
     scannedNetworks[i].rssi = WiFi.RSSI(i);
   }
@@ -75,30 +78,30 @@ void scanLocalNetworks() {
 }
 
 // Hardware Pin Definitions
-#define RELAY_LIGHT       18  // Relay 1: Light Bulb 1
-#define RELAY_FAN         19  // Relay 2: Light Bulb 2
-#define RELAY_BULB3       32  // Relay 3: Light Bulb 3 (expansion)
-#define RELAY_BULB4       33  // Relay 4: Light Bulb 4 (expansion)
-#define RELAY_WATER_PUMP  21  // Relay 5: Overhead Fill Pump (Automated)
-#define RELAY_FIRE_PUMP   22  // Relay 6: Fire Extinguisher Pump (Automated)
+#define RELAY_LIGHT 18      // Relay 1: Light Bulb 1
+#define RELAY_FAN 19        // Relay 2: Light Bulb 2
+#define RELAY_BULB3 32      // Relay 3: Light Bulb 3 (expansion)
+#define RELAY_BULB4 33      // Relay 4: Light Bulb 4 (expansion)
+#define RELAY_WATER_PUMP 21 // Relay 5: Overhead Fill Pump (Automated)
+#define RELAY_FIRE_PUMP 22  // Relay 6: Fire Extinguisher Pump (Automated)
 
-#define SWITCH_LIGHT  4
-#define SWITCH_FAN    5
-#define SWITCH_BULB3  16
-#define SWITCH_BULB4  17
+#define SWITCH_LIGHT 4
+#define SWITCH_FAN 5
+#define SWITCH_BULB3 16
+#define SWITCH_BULB4 17
 
-#define PIN_GAS       34
-#define PIN_FLAME     35  // AO (Analog Output) of flame sensor -> ADC1_CH7
+#define PIN_GAS 34
+#define PIN_FLAME 35 // AO (Analog Output) of flame sensor -> ADC1_CH7
 
 // Ultrasonic Sensor Pins (standard 4-wire mode)
-#define US_TRIG       25
-#define US_ECHO       26
+#define US_TRIG 25
+#define US_ECHO 26
 
-#define PIN_BUZZER          27
-#define PIN_LED             14
+#define PIN_BUZZER 27
+#define PIN_LED 14
 
 // Physical parameters
-int TANK_HEIGHT = 100; // Tank height in cm (adjustable)
+int TANK_HEIGHT = 100;                      // Tank height in cm (adjustable)
 const unsigned long UPDATE_INTERVAL = 1500; // Send update every 1.5 seconds
 
 // ============================================================
@@ -142,22 +145,22 @@ const unsigned long UPDATE_INTERVAL = 1500; // Send update every 1.5 seconds
 // and also rejects saturating sunlight by its extreme mean level.
 // Real flame is confirmed only when mean is in-band AND the signal
 // FLICKERS (peak-to-peak or relative flicker ratio).
-const int FLAME_IR_MEAN_MIN = 40;              // ADC avg below this = disconnected / pinned low (no signal)
-const int FLAME_IR_MEAN_MAX = 4090;            // ADC avg above this = pinned at rail; flicker is still the discriminator
-const int FLAME_FLICKER_PP_THRESHOLD = 25;     // Absolute peak-to-peak ADC variation -> flicker (real flame)
-const int FLAME_FLICKER_RATIO_X1000 = 25;      // Relative flicker: PP*1000/mean >= this (catches small-swing flames)
-const int FLAME_WINDOW_SIZE = 30;              // Samples per evaluation window (~0.9s at 30ms) - responsive
+const int FLAME_IR_MEAN_MIN = 40;          // ADC avg below this = disconnected / pinned low (no signal)
+const int FLAME_IR_MEAN_MAX = 4090;        // ADC avg above this = pinned at rail; flicker is still the discriminator
+const int FLAME_FLICKER_PP_THRESHOLD = 25; // Absolute peak-to-peak ADC variation -> flicker (real flame)
+const int FLAME_FLICKER_RATIO_X1000 = 25;  // Relative flicker: PP*1000/mean >= this (catches small-swing flames)
+const int FLAME_WINDOW_SIZE = 30;          // Samples per evaluation window (~0.9s at 30ms) - responsive
 const unsigned long FLAME_SAMPLE_INTERVAL_MS = 30;
-const int FLAME_CLEAR_WINDOWS = 1;             // Clear fire after 1 no-flame window (~0.9s): buzzer OFF promptly when no fire
+const int FLAME_CLEAR_WINDOWS = 1;                  // Clear fire after 1 no-flame window (~0.9s): buzzer OFF promptly when no fire
 const unsigned long FLAME_DEBUG_INTERVAL_MS = 5000; // Periodic Serial debug for field tuning
 
 // Flame filter runtime state
 unsigned long lastFlameSampleTime = 0;
-int flameSamples[FLAME_WINDOW_SIZE];           // Ring buffer of recent raw analog readings
+int flameSamples[FLAME_WINDOW_SIZE]; // Ring buffer of recent raw analog readings
 int flameSampleIndex = 0;
-int flameClearWindowCount = 0;                 // Consecutive no-flame windows (to unlatch fire)
+int flameClearWindowCount = 0; // Consecutive no-flame windows (to unlatch fire)
 unsigned long lastFlameDebugTime = 0;
-bool fireDetected = false;                     // Latched flicker-confirmed fire (default: no fire)
+bool fireDetected = false; // Latched flicker-confirmed fire (default: no fire)
 
 // Last known physical states to detect local changes
 bool lastSwitchLightState = HIGH;
@@ -196,8 +199,10 @@ bool sonicAvail = true;
 unsigned long lastUpdateTime = 0;
 
 // Connect to the saved WiFi access point
-bool connectWiFi() {
-  if (ssid == "") return false;
+bool connectWiFi()
+{
+  if (ssid == "")
+    return false;
 
   Serial.println("Attempting to connect to WiFi: " + ssid);
   WiFi.mode(WIFI_STA);
@@ -205,24 +210,29 @@ bool connectWiFi() {
 
   // Wait up to 15 seconds (30 * 500ms) for connection
   int timeout = 30;
-  while (WiFi.status() != WL_CONNECTED && timeout > 0) {
+  while (WiFi.status() != WL_CONNECTED && timeout > 0)
+  {
     delay(500);
     Serial.print(".");
     timeout--;
   }
 
-  if (WiFi.status() == WL_CONNECTED) {
+  if (WiFi.status() == WL_CONNECTED)
+  {
     Serial.println("\nWiFi Connected! IP Address: ");
     Serial.println(WiFi.localIP());
     return true;
-  } else {
+  }
+  else
+  {
     Serial.println("\nFailed to connect to saved WiFi.");
     return false;
   }
 }
 
 // Render the mobile-friendly configuration page
-void handleRoot() {
+void handleRoot()
+{
   String html = "<!DOCTYPE html><html><head>";
   html += "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">";
   html += "<title>Smart Home WiFi Setup</title>";
@@ -243,22 +253,26 @@ void handleRoot() {
   html += "<h2>Smart Home Setup</h2>";
   html += "<p>Connect the device to your local network and register the backend server URL.</p>";
   html += "<form action=\"/save\" method=\"POST\">";
-  
+
   html += "<label>Select Local Network</label>";
   html += "<select name=\"ssid\" id=\"ssid_select\">";
 
   // Display pre-scanned WiFi networks
-  if (numScannedNetworks <= 0) {
+  if (numScannedNetworks <= 0)
+  {
     html += "<option value=\"\">No networks found - Enter manually</option>";
-  } else {
-    for (int i = 0; i < numScannedNetworks; ++i) {
+  }
+  else
+  {
+    for (int i = 0; i < numScannedNetworks; ++i)
+    {
       String network = scannedNetworks[i].ssid;
       int rssi = scannedNetworks[i].rssi;
       html += "<option value=\"" + network + "\">" + network + " (" + String(rssi) + " dBm)</option>";
     }
   }
   html += "</select>";
-  
+
   html += "<div style=\"margin-top: 8px; text-align: left;\">";
   html += "<span style=\"color: #64748b; font-size: 0.8rem;\">Or type SSID manually:</span>";
   html += "<input type=\"text\" name=\"manual_ssid\" placeholder=\"Manual Network Name\" style=\"margin-top: 5px;\">";
@@ -280,17 +294,20 @@ void handleRoot() {
 }
 
 // Handle the credentials save request
-void handleSave() {
+void handleSave()
+{
   String reqSsid = webServer.arg("ssid");
   String manualSsid = webServer.arg("manual_ssid");
   String reqPassword = webServer.arg("password");
   String reqServerUrl = webServer.arg("server_url");
 
-  if (manualSsid != "") {
+  if (manualSsid != "")
+  {
     reqSsid = manualSsid;
   }
 
-  if (reqSsid != "") {
+  if (reqSsid != "")
+  {
     // Save to Non-Volatile Storage (Preferences)
     preferences.begin("wifi", false);
     preferences.putString("ssid", reqSsid);
@@ -307,53 +324,61 @@ void handleSave() {
     successHtml += "<div class=\"card\"><h2>Setup Completed Successfully!</h2>";
     successHtml += "<p>WiFi settings have been saved. The ESP32 is now attempting to connect to <strong>" + reqSsid + "</strong>.</p>";
     successHtml += "<p style=\"color: #94a3b8; font-size: 0.9rem;\">The device is restarting. You can disconnect your mobile phone from 'Smart-Home-Setup' and refresh your Dashboard.</p></div></body></html>";
-    
+
     webServer.send(200, "text/html", successHtml);
     delay(1000);
     WiFi.softAPdisconnect(true);
     WiFi.disconnect(true);
     delay(500);
     ESP.restart();
-  } else {
+  }
+  else
+  {
     webServer.send(400, "text/plain", "Error: SSID cannot be empty.");
   }
 }
 
-bool isIp(String str) {
-  for (size_t i = 0; i < str.length(); i++) {
+bool isIp(String str)
+{
+  for (size_t i = 0; i < str.length(); i++)
+  {
     int c = str.charAt(i);
-    if (c != '.' && (c < '0' || c > '9')) {
+    if (c != '.' && (c < '0' || c > '9'))
+    {
       return false;
     }
   }
   return true;
 }
 
-void handleNotFound() {
+void handleNotFound()
+{
   String uri = webServer.uri();
   String host = webServer.hostHeader();
-  
+
   // If the request is not for our ESP32 IP address, redirect to it to trigger captive portal popup
-  if (!isIp(host) && host != "192.168.4.1" && host != "localhost") {
+  if (!isIp(host) && host != "192.168.4.1" && host != "localhost")
+  {
     Serial.println("Redirecting: " + host + uri + " to 192.168.4.1");
     webServer.sendHeader("Location", "http://192.168.4.1/", true);
     webServer.send(302, "text/plain", ""); // Empty response with redirect header
     return;
   }
-  
+
   // If it's directly for our IP but a random path, serve the setup page
   handleRoot();
 }
 
 // Start Soft Access Point
-void startCaptivePortal() {
+void startCaptivePortal()
+{
   Serial.println("\n--- Entering AP Configuration Mode ---");
-  
+
   // First pre-scan available networks to populate list before AP mode disrupts channel scanning
   scanLocalNetworks();
-  
+
   WiFi.mode(WIFI_AP_STA);
-  
+
   // Create an open, easily accessible setup network
   WiFi.softAP("Smart-Home-Setup");
   delay(100);
@@ -373,7 +398,8 @@ void startCaptivePortal() {
   webServer.begin();
 }
 
-void setup() {
+void setup()
+{
   Serial.begin(115200);
 
   // Initialize Relays as outputs and set to active-low (high-impedance/OFF default)
@@ -383,8 +409,8 @@ void setup() {
   pinMode(RELAY_BULB4, OUTPUT);
   pinMode(RELAY_WATER_PUMP, OUTPUT);
   pinMode(RELAY_FIRE_PUMP, OUTPUT);
-  
-  digitalWrite(RELAY_LIGHT, HIGH);  // HIGH = relay OFF for active-low modules
+
+  digitalWrite(RELAY_LIGHT, HIGH); // HIGH = relay OFF for active-low modules
   digitalWrite(RELAY_FAN, HIGH);
   digitalWrite(RELAY_BULB3, HIGH);
   digitalWrite(RELAY_BULB4, HIGH);
@@ -395,10 +421,10 @@ void setup() {
   // HIGH = relay de-energized (OFF), LOW = relay energized (ON)
   pinMode(PIN_LED, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
-  digitalWrite(PIN_LED, HIGH);   // LED relay OFF
+  digitalWrite(PIN_LED, HIGH);    // LED relay OFF
   digitalWrite(PIN_BUZZER, HIGH); // Buzzer relay OFF
 
-// Initialize switches with pullups (only the 4 light-bulb switches)
+  // Initialize switches with pullups (only the 4 light-bulb switches)
   pinMode(SWITCH_LIGHT, INPUT_PULLUP);
   pinMode(SWITCH_FAN, INPUT_PULLUP);
   pinMode(SWITCH_BULB3, INPUT_PULLUP);
@@ -408,7 +434,7 @@ void setup() {
   pinMode(PIN_GAS, INPUT);
   analogSetAttenuation(ADC_11db); // Configure 11dB attenuation for 0-3.3V full-scale range on ESP32 ADC
   // PIN_FLAME (GPIO 35 = ADC1_CH7) used in analog mode (no pinMode needed, but set for clarity)
-  pinMode(PIN_FLAME, INPUT);      // Analog input (ADC) for flame sensor AO
+  pinMode(PIN_FLAME, INPUT); // Analog input (ADC) for flame sensor AO
   pinMode(US_TRIG, OUTPUT);
   digitalWrite(US_TRIG, LOW);
   pinMode(US_ECHO, INPUT);
@@ -416,14 +442,16 @@ void setup() {
   // --- Check for Factory Reset Trigger ---
   // If the Light switch is toggled/held LOW on boot, we clear all WiFi credentials
   delay(200);
-  if (digitalRead(SWITCH_LIGHT) == LOW) {
+  if (digitalRead(SWITCH_LIGHT) == LOW)
+  {
     Serial.println("\n[RESET TRIGGERED] Clearing saved WiFi settings...");
     preferences.begin("wifi", false);
     preferences.clear();
     preferences.end();
-    
+
     // Quick warning blinks (active-low relay: LOW = LED ON)
-    for (int i = 0; i < 15; i++) {
+    for (int i = 0; i < 15; i++)
+    {
       digitalWrite(PIN_LED, LOW);
       delay(80);
       digitalWrite(PIN_LED, HIGH);
@@ -440,24 +468,32 @@ void setup() {
   preferences.end();
 
   // If URL is empty or is the placeholder template, auto-override to the actual project server URL
-  if (savedServerUrl.indexOf("YOUR-APPLET-URL") != -1 || savedServerUrl == "" || savedServerUrl == "https://YOUR-APPLET-URL.run.app/api/device/update") {
+  if (savedServerUrl.indexOf("YOUR-APPLET-URL") != -1 || savedServerUrl == "" || savedServerUrl == "https://YOUR-APPLET-URL.run.app/api/device/update")
+  {
     savedServerUrl = "https://ais-dev-xfuy6cok7yatn5f2pcjra7-72596629860.asia-southeast1.run.app/api/device/update";
   }
 
   // --- Connection Router ---
   bool connected = false;
-  if (ssid != "") {
+  if (ssid != "")
+  {
     connected = connectWiFi();
   }
 
-  if (!connected) {
+  if (!connected)
+  {
     inConfigMode = true;
     startCaptivePortal();
-  } else {
+  }
+  else
+  {
     // Normal connection visual signal (slow double blink, active-low: LOW = LED ON)
-    digitalWrite(PIN_LED, LOW); delay(200);
-    digitalWrite(PIN_LED, HIGH); delay(100);
-    digitalWrite(PIN_LED, LOW); delay(200);
+    digitalWrite(PIN_LED, LOW);
+    delay(200);
+    digitalWrite(PIN_LED, HIGH);
+    delay(100);
+    digitalWrite(PIN_LED, LOW);
+    delay(200);
     digitalWrite(PIN_LED, HIGH);
   }
 }
@@ -465,7 +501,8 @@ void setup() {
 // Function to measure water tank level percentage
 // Returns -1 if the ultrasonic sensor read fails (no echo), so the pump logic
 // can safely skip auto-fill instead of falsely triggering on 0%.
-int getWaterLevelPercentage() {
+int getWaterLevelPercentage()
+{
   digitalWrite(US_TRIG, LOW);
   delayMicroseconds(2);
   digitalWrite(US_TRIG, HIGH);
@@ -473,18 +510,23 @@ int getWaterLevelPercentage() {
   digitalWrite(US_TRIG, LOW);
 
   long duration = pulseIn(US_ECHO, HIGH, 30000); // 30ms timeout to prevent hanging
-  if (duration == 0) return -1;  // No echo received — sensor failure/out-of-range
-  
+  if (duration == 0)
+    return -1; // No echo received — sensor failure/out-of-range
+
   // Calculate distance in cm
   float distance = duration * 0.034 / 2;
 
-  if (distance > TANK_HEIGHT) distance = TANK_HEIGHT;
-  if (distance < 0) distance = 0;
+  if (distance > TANK_HEIGHT)
+    distance = TANK_HEIGHT;
+  if (distance < 0)
+    distance = 0;
 
   // Formula: Percentage = ((Height - Distance) / Height) * 100
   int percentage = ((TANK_HEIGHT - distance) / TANK_HEIGHT) * 100;
-  if (percentage < 0) percentage = 0;
-  if (percentage > 100) percentage = 100;
+  if (percentage < 0)
+    percentage = 0;
+  if (percentage > 100)
+    percentage = 100;
 
   return percentage;
 }
@@ -495,9 +537,11 @@ int getWaterLevelPercentage() {
 // sliding window, computes mean IR + peak-to-peak flicker, and
 // updates fireDetected.
 // ============================================================
-void sampleFlameFlicker() {
+void sampleFlameFlicker()
+{
   unsigned long now = millis();
-  if (now - lastFlameSampleTime < FLAME_SAMPLE_INTERVAL_MS) {
+  if (now - lastFlameSampleTime < FLAME_SAMPLE_INTERVAL_MS)
+  {
     return; // Not yet time for next sample
   }
   lastFlameSampleTime = now;
@@ -510,16 +554,20 @@ void sampleFlameFlicker() {
   flameSampleIndex = (flameSampleIndex + 1) % FLAME_WINDOW_SIZE;
 
   // Every time the ring buffer completes a full window, evaluate it.
-  if (flameSampleIndex == 0) {
+  if (flameSampleIndex == 0)
+  {
     // Compute mean IR level and peak-to-peak over the window.
     long sum = 0;
     int minVal = 4095;
     int maxVal = 0;
-    for (int i = 0; i < FLAME_WINDOW_SIZE; i++) {
+    for (int i = 0; i < FLAME_WINDOW_SIZE; i++)
+    {
       int v = flameSamples[i];
       sum += v;
-      if (v < minVal) minVal = v;
-      if (v > maxVal) maxVal = v;
+      if (v < minVal)
+        minVal = v;
+      if (v > maxVal)
+        maxVal = v;
     }
     int mean = sum / FLAME_WINDOW_SIZE;
     int peakToPeak = maxVal - minVal;
@@ -536,10 +584,12 @@ void sampleFlameFlicker() {
     bool hasFlicker = (peakToPeak >= FLAME_FLICKER_PP_THRESHOLD) ||
                       (flickerRatio >= FLAME_FLICKER_RATIO_X1000);
 
-    if (irInBand && hasFlicker) {
+    if (irInBand && hasFlicker)
+    {
       // Real flame confirmed (mean in-band AND flicker) -> latch ON
-      flameClearWindowCount = 0;   // Reset the unlatch counter
-      if (!fireDetected) {
+      flameClearWindowCount = 0; // Reset the unlatch counter
+      if (!fireDetected)
+      {
         fireDetected = true;
         Serial.print("[FLAME FILTER] FIRE CONFIRMED! mean=");
         Serial.print(mean);
@@ -549,7 +599,9 @@ void sampleFlameFlicker() {
         Serial.print(flickerRatio);
         Serial.println();
       }
-    } else {
+    }
+    else
+    {
       // No flame in this window (out-of-band OR no flicker).
       // To avoid a ring-break-ring stutter from a momentary flicker
       // lull or a brief saturation, we do NOT unlatch immediately.
@@ -557,7 +609,8 @@ void sampleFlameFlicker() {
       // no-flame windows (~0.9s), so the buzzer turns OFF promptly
       // once the fire is gone.
       flameClearWindowCount++;
-      if (fireDetected && flameClearWindowCount >= FLAME_CLEAR_WINDOWS) {
+      if (fireDetected && flameClearWindowCount >= FLAME_CLEAR_WINDOWS)
+      {
         fireDetected = false;
         flameClearWindowCount = 0;
         Serial.print("[FLAME FILTER] Fire cleared after sustained absence (mean=");
@@ -569,18 +622,22 @@ void sampleFlameFlicker() {
   }
 
   // Periodic debug (once every few seconds) for on-site tuning
-  if (now - lastFlameDebugTime >= FLAME_DEBUG_INTERVAL_MS) {
+  if (now - lastFlameDebugTime >= FLAME_DEBUG_INTERVAL_MS)
+  {
     lastFlameDebugTime = now;
     int latestMean = 0;
     int latestPP = 0;
     long s = 0;
     int mn = 4095;
     int mx = 0;
-    for (int i = 0; i < FLAME_WINDOW_SIZE; i++) {
+    for (int i = 0; i < FLAME_WINDOW_SIZE; i++)
+    {
       int v = flameSamples[i];
       s += v;
-      if (v < mn) mn = v;
-      if (v > mx) mx = v;
+      if (v < mn)
+        mn = v;
+      if (v > mx)
+        mx = v;
     }
     latestMean = s / FLAME_WINDOW_SIZE;
     latestPP = mx - mn;
@@ -597,37 +654,47 @@ void sampleFlameFlicker() {
   }
 }
 
-void loop() {
+void loop()
+{
   // If in AP Config mode, run portal servers and check background liveness
-  if (inConfigMode) {
+  if (inConfigMode)
+  {
     dnsServer.processNextRequest();
     webServer.handleClient();
-    
+
     // Config Mode indicator: Slow pulsing on status LED (active-low: LOW = LED ON)
     static unsigned long lastFlash = 0;
-    if (millis() - lastFlash > 1000) {
+    if (millis() - lastFlash > 1000)
+    {
       lastFlash = millis();
       digitalWrite(PIN_LED, !digitalRead(PIN_LED));
     }
 
     // Auto-heal reconnect: Periodically check if we can connect to the saved router in background
     static unsigned long lastBackgroundReconnect = 0;
-    if (ssid != "" && (millis() - lastBackgroundReconnect > 12000)) {
+    if (ssid != "" && (millis() - lastBackgroundReconnect > 12000))
+    {
       lastBackgroundReconnect = millis();
       Serial.println("\n[AUTO-HEAL] Checking background router connection...");
-      if (WiFi.status() == WL_CONNECTED) {
+      if (WiFi.status() == WL_CONNECTED)
+      {
         Serial.println("[AUTO-HEAL] Reconnected to router successfully in background! Resuming normal mode.");
         WiFi.softAPdisconnect(true); // Shut down AP
         WiFi.mode(WIFI_STA);         // Switch back to station-only mode
         inConfigMode = false;
-        
+
         // Clear background timer and flash success sequence (3 quick blinks, active-low: LOW = LED ON)
-        for (int i = 0; i < 3; i++) {
-          digitalWrite(PIN_LED, LOW); delay(100);
-          digitalWrite(PIN_LED, HIGH); delay(100);
+        for (int i = 0; i < 3; i++)
+        {
+          digitalWrite(PIN_LED, LOW);
+          delay(100);
+          digitalWrite(PIN_LED, HIGH);
+          delay(100);
         }
         return;
-      } else {
+      }
+      else
+      {
         // Explicitly trigger a background reconnect
         WiFi.begin(ssid.c_str(), password.c_str());
       }
@@ -637,11 +704,15 @@ void loop() {
 
   // Monitor WiFi connection liveness
   static unsigned long lastWifiConnectedTime = millis();
-  if (WiFi.status() == WL_CONNECTED) {
+  if (WiFi.status() == WL_CONNECTED)
+  {
     lastWifiConnectedTime = millis();
-  } else {
+  }
+  else
+  {
     // If disconnected for more than 15 seconds, automatically fall back to AP captive portal configuration mode
-    if (millis() - lastWifiConnectedTime > 15000) {
+    if (millis() - lastWifiConnectedTime > 15000)
+    {
       Serial.println("\n[WIFI LOST] WiFi connection lost for >15 seconds. Re-entering AP Captive Portal configuration mode...");
       inConfigMode = true;
       WiFi.disconnect(false); // Disconnect STA but keep configuration profiles
@@ -662,8 +733,10 @@ void loop() {
   unsigned long now = millis();
 
   // --- Light Switch (Debounced) ---
-  if (switchLight == LOW) {
-    if (!switchLightPressed && (now - debounceLightTime > DEBOUNCE_DELAY)) {
+  if (switchLight == LOW)
+  {
+    if (!switchLightPressed && (now - debounceLightTime > DEBOUNCE_DELAY))
+    {
       switchLightPressed = true;
       debounceLightTime = now;
       lightState = !lightState;
@@ -671,17 +744,22 @@ void loop() {
       stateChanged = true;
       Serial.println("Physical Switch: Light Toggled!");
     }
-  } else {
+  }
+  else
+  {
     // Reset flag when released, so next press fires again
-    if (switchLightPressed) {
+    if (switchLightPressed)
+    {
       switchLightPressed = false;
       debounceLightTime = now;
     }
   }
 
   // --- Fan Switch (Debounced) ---
-  if (switchFan == LOW) {
-    if (!switchFanPressed && (now - debounceFanTime > DEBOUNCE_DELAY)) {
+  if (switchFan == LOW)
+  {
+    if (!switchFanPressed && (now - debounceFanTime > DEBOUNCE_DELAY))
+    {
       switchFanPressed = true;
       debounceFanTime = now;
       fanState = !fanState;
@@ -689,16 +767,21 @@ void loop() {
       stateChanged = true;
       Serial.println("Physical Switch: Fan Toggled!");
     }
-  } else {
-    if (switchFanPressed) {
+  }
+  else
+  {
+    if (switchFanPressed)
+    {
       switchFanPressed = false;
       debounceFanTime = now;
     }
   }
 
   // --- Bulb 3 Switch (Debounced) ---
-  if (switchBulb3 == LOW) {
-    if (!switchBulb3Pressed && (now - debounceBulb3Time > DEBOUNCE_DELAY)) {
+  if (switchBulb3 == LOW)
+  {
+    if (!switchBulb3Pressed && (now - debounceBulb3Time > DEBOUNCE_DELAY))
+    {
       switchBulb3Pressed = true;
       debounceBulb3Time = now;
       bulb3State = !bulb3State;
@@ -706,16 +789,21 @@ void loop() {
       stateChanged = true;
       Serial.println("Physical Switch: Light Bulb 3 Toggled!");
     }
-  } else {
-    if (switchBulb3Pressed) {
+  }
+  else
+  {
+    if (switchBulb3Pressed)
+    {
       switchBulb3Pressed = false;
       debounceBulb3Time = now;
     }
   }
 
   // --- Bulb 4 Switch (Debounced) ---
-  if (switchBulb4 == LOW) {
-    if (!switchBulb4Pressed && (now - debounceBulb4Time > DEBOUNCE_DELAY)) {
+  if (switchBulb4 == LOW)
+  {
+    if (!switchBulb4Pressed && (now - debounceBulb4Time > DEBOUNCE_DELAY))
+    {
       switchBulb4Pressed = true;
       debounceBulb4Time = now;
       bulb4State = !bulb4State;
@@ -723,14 +811,17 @@ void loop() {
       stateChanged = true;
       Serial.println("Physical Switch: Light Bulb 4 Toggled!");
     }
-  } else {
-    if (switchBulb4Pressed) {
+  }
+  else
+  {
+    if (switchBulb4Pressed)
+    {
       switchBulb4Pressed = false;
       debounceBulb4Time = now;
     }
   }
 
-// NOTE: Physical switch control is ONLY for the four light bulbs (Light, Fan, Bulb3, Bulb4).
+  // NOTE: Physical switch control is ONLY for the four light bulbs (Light, Fan, Bulb3, Bulb4).
   // The Overhead Fill Pump and Fire Extinguisher Pump are fully AUTOMATED (water level / fire
   // detection / web dashboard) and are NOT controlled by physical switches.
 
@@ -738,10 +829,11 @@ void loop() {
   // Flame Sensor (AO, analog): sampled via non-blocking flicker filter
   // Rejects steady sunlight; only confirms fire when IR flickers (real flame).
   sampleFlameFlicker();
-  
+
   // MQ-2 Gas Sensor: Take 8-sample average to filter out ADC noise spikes
   int gasSum = 0;
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 8; i++)
+  {
     gasSum += analogRead(PIN_GAS);
     delayMicroseconds(150);
   }
@@ -761,13 +853,16 @@ void loop() {
   // soon as the hazard clears locally (fireDetected clears in ~1s, gas leaks
   // clear when the gas reading drops below the threshold).
   // Buzzer/LED are connected through a relay module (active-low): LOW = relay energized = ON.
-  bool fireActive = fireAvail && fireDetected;   // Local flame sensor only
-  bool gasActive = gasAvail && gasLeakage;       // Local gas sensor only
+  bool fireActive = fireAvail && fireDetected; // Local flame sensor only
+  bool gasActive = gasAvail && gasLeakage;     // Local gas sensor only
 
-  if (fireActive || gasActive) {
-    digitalWrite(PIN_BUZZER, LOW);  // Buzzer relay ON (alarm sounding)
-    digitalWrite(PIN_LED, LOW);     // Warning LED relay ON
-  } else {
+  if (fireActive || gasActive)
+  {
+    digitalWrite(PIN_BUZZER, LOW); // Buzzer relay ON (alarm sounding)
+    digitalWrite(PIN_LED, LOW);    // Warning LED relay ON
+  }
+  else
+  {
     digitalWrite(PIN_BUZZER, HIGH); // Buzzer relay OFF
     digitalWrite(PIN_LED, HIGH);    // Warning LED relay OFF
   }
@@ -777,19 +872,30 @@ void loop() {
   // remote override (serverFirePumpStatus) is active. It does NOT rely on the
   // latched serverFireStatus, so a stale/simulated web fire cannot keep the
   // pump running after the local flame is out.
-  if (fireAvail) {
-    if (fireDetected || serverFirePumpStatus) {
-      digitalWrite(RELAY_FIRE_PUMP, LOW);  // Turn ON Fire Suppression Pump (Active Low)
+  if (fireAvail)
+  {
+    if (fireDetected || serverFirePumpStatus)
+    {
+      digitalWrite(RELAY_FIRE_PUMP, LOW); // Turn ON Fire Suppression Pump (Active Low)
       socketState = true;
-    } else if (!socketState) {
-      // Only force OFF if the physical switch did NOT explicitly turn it on
-      digitalWrite(RELAY_FIRE_PUMP, HIGH); // Turn OFF Fire Suppression Pump (Active Low)
     }
+    else
+    {
+      // No fire present and no remote override: ensure the fire pump is OFF.
+      digitalWrite(RELAY_FIRE_PUMP, HIGH); // Turn OFF Fire Suppression Pump (Active Low)
+      socketState = false;
+    }
+  }
+  else
+  {
+    // If the flame sensor is unavailable, keep the fire pump OFF as a safety precaution.
+    digitalWrite(RELAY_FIRE_PUMP, HIGH);
+    socketState = false;
   }
 
   // 4. Calculate Water Tank Percentage
   int waterLevel = getWaterLevelPercentage();
-  bool waterSensorValid = (waterLevel >= 0);  // -1 means sensor read failed
+  bool waterSensorValid = (waterLevel >= 0); // -1 means sensor read failed
 
   // Local physical autonomous safeguard with hysteresis:
   // - When pump is OFF: turn ON only when water level drops to 20% or below
@@ -798,48 +904,63 @@ void loop() {
   // when water level fluctuates near the thresholds.
   // NOTE: Auto-fill is SKIPPED entirely if the ultrasonic sensor read fails
   // (waterSensorValid == false) to prevent false pump activation on 0%.
-  if (sonicAvail) {
-    if (!waterSensorValid) {
+  if (sonicAvail)
+  {
+    if (!waterSensorValid)
+    {
       // SAFETY: Ultrasonic sensor read failed — turn OFF the fill pump to
       // prevent indefinite running / water overflow (we cannot trust readings).
-      if (tvState) {
+      if (tvState)
+      {
         digitalWrite(RELAY_WATER_PUMP, HIGH); // Turn OFF overhead fill pump (Active Low)
         tvState = false;
       }
-    } else if (tvState) {
+    }
+    else if (tvState)
+    {
       // Pump is currently ON — only turn OFF when tank is sufficiently full
-      if (waterLevel >= 80) {
+      if (waterLevel >= 80)
+      {
         digitalWrite(RELAY_WATER_PUMP, HIGH); // Turn OFF overhead fill pump (Active Low)
         tvState = false;
       }
-    } else {
+    }
+    else
+    {
       // Pump is currently OFF — only turn ON when tank is critically low
-      if (waterLevel <= 20) {
-        digitalWrite(RELAY_WATER_PUMP, LOW);  // Turn ON overhead fill pump (Active Low)
+      if (waterLevel <= 20)
+      {
+        digitalWrite(RELAY_WATER_PUMP, LOW); // Turn ON overhead fill pump (Active Low)
         tvState = true;
       }
     }
   }
 
   // 5. Send parameters to server if time interval elapsed OR state changed
-  if (millis() - lastUpdateTime > UPDATE_INTERVAL || stateChanged) {
+  if (millis() - lastUpdateTime > UPDATE_INTERVAL || stateChanged)
+  {
     lastUpdateTime = millis();
 
-    if (WiFi.status() == WL_CONNECTED) {
+    if (WiFi.status() == WL_CONNECTED)
+    {
       HTTPClient http;
       bool beginSuccess = false;
       WiFiClientSecure secureClient;
       WiFiClient normalClient;
 
       // Handle both secure (HTTPS) and non-secure (HTTP) endpoints cleanly
-      if (savedServerUrl.startsWith("https://")) {
+      if (savedServerUrl.startsWith("https://"))
+      {
         secureClient.setInsecure(); // Ignore SSL fingerprint validation to bypass secure connection hurdles
         beginSuccess = http.begin(secureClient, savedServerUrl);
-      } else {
+      }
+      else
+      {
         beginSuccess = http.begin(normalClient, savedServerUrl);
       }
 
-      if (beginSuccess) {
+      if (beginSuccess)
+      {
         http.addHeader("Content-Type", "application/json");
 
         // Construct JSON payload
@@ -861,119 +982,163 @@ void loop() {
 
         int httpResponseCode = http.POST(payload);
 
-        if (httpResponseCode > 0) {
+        if (httpResponseCode > 0)
+        {
           String response = http.getString();
           Serial.println("HTTP Response code: " + String(httpResponseCode));
           Serial.println("Response: " + response);
 
           // Parse state updates from response (using simple, robust flat states key checks)
-          if (response.indexOf("\"light\":true") != -1) {
+          if (response.indexOf("\"light\":true") != -1)
+          {
             lightState = true;
             digitalWrite(RELAY_LIGHT, LOW);
-          } else if (response.indexOf("\"light\":false") != -1) {
+          }
+          else if (response.indexOf("\"light\":false") != -1)
+          {
             lightState = false;
             digitalWrite(RELAY_LIGHT, HIGH);
           }
-          
-          if (response.indexOf("\"fan\":true") != -1) {
+
+          if (response.indexOf("\"fan\":true") != -1)
+          {
             fanState = true;
             digitalWrite(RELAY_FAN, LOW);
-          } else if (response.indexOf("\"fan\":false") != -1) {
+          }
+          else if (response.indexOf("\"fan\":false") != -1)
+          {
             fanState = false;
             digitalWrite(RELAY_FAN, HIGH);
           }
 
-          if (response.indexOf("\"bulb3\":true") != -1) {
+          if (response.indexOf("\"bulb3\":true") != -1)
+          {
             bulb3State = true;
             digitalWrite(RELAY_BULB3, LOW);
-          } else if (response.indexOf("\"bulb3\":false") != -1) {
+          }
+          else if (response.indexOf("\"bulb3\":false") != -1)
+          {
             bulb3State = false;
             digitalWrite(RELAY_BULB3, HIGH);
           }
 
-          if (response.indexOf("\"bulb4\":true") != -1) {
+          if (response.indexOf("\"bulb4\":true") != -1)
+          {
             bulb4State = true;
             digitalWrite(RELAY_BULB4, LOW);
-          } else if (response.indexOf("\"bulb4\":false") != -1) {
+          }
+          else if (response.indexOf("\"bulb4\":false") != -1)
+          {
             bulb4State = false;
             digitalWrite(RELAY_BULB4, HIGH);
           }
 
-          if (response.indexOf("\"tv\":true") != -1) {
+          if (response.indexOf("\"tv\":true") != -1)
+          {
             tvState = true;
             digitalWrite(RELAY_WATER_PUMP, LOW);
-          } else if (response.indexOf("\"tv\":false") != -1) {
+          }
+          else if (response.indexOf("\"tv\":false") != -1)
+          {
             tvState = false;
             digitalWrite(RELAY_WATER_PUMP, HIGH);
           }
 
-          if (response.indexOf("\"socket\":true") != -1) {
+          if (response.indexOf("\"socket\":true") != -1)
+          {
             socketState = true;
             digitalWrite(RELAY_FIRE_PUMP, LOW);
-          } else if (response.indexOf("\"socket\":false") != -1) {
+          }
+          else if (response.indexOf("\"socket\":false") != -1)
+          {
             socketState = false;
             digitalWrite(RELAY_FIRE_PUMP, HIGH);
           }
 
           // Apply water pump relay status from server (Overhead Fill Pump 1)
-          if (response.indexOf("\"pump\":true") != -1) {
+          if (response.indexOf("\"pump\":true") != -1)
+          {
             digitalWrite(RELAY_WATER_PUMP, LOW); // Turn on water pump
-          } else if (response.indexOf("\"pump\":false") != -1) {
+          }
+          else if (response.indexOf("\"pump\":false") != -1)
+          {
             digitalWrite(RELAY_WATER_PUMP, HIGH); // Turn off water pump
           }
 
           // Apply fire suppression pump status from server (Fire Extinguisher Pump 2)
-          if (response.indexOf("\"firePump\":true") != -1) {
+          if (response.indexOf("\"firePump\":true") != -1)
+          {
             serverFirePumpStatus = true;
-          } else if (response.indexOf("\"firePump\":false") != -1) {
+          }
+          else if (response.indexOf("\"firePump\":false") != -1)
+          {
             serverFirePumpStatus = false;
           }
 
-// Sync fire and gas alarm states from server response (e.g. if simulated on web)
+          // Sync fire and gas alarm states from server response (e.g. if simulated on web)
           // NOTE: These are no longer used to drive the physical buzzer/LED (which now
           // responds only to local sensors). They are parsed for informational sync only.
-          if (response.indexOf("\"fire\":true") != -1) {
+          if (response.indexOf("\"fire\":true") != -1)
+          {
             serverFireStatus = true;
-          } else if (response.indexOf("\"fire\":false") != -1) {
+          }
+          else if (response.indexOf("\"fire\":false") != -1)
+          {
             serverFireStatus = false;
           }
 
-          if (response.indexOf("\"gas\":true") != -1) {
+          if (response.indexOf("\"gas\":true") != -1)
+          {
             serverGasStatus = true;
-          } else if (response.indexOf("\"gas\":false") != -1) {
+          }
+          else if (response.indexOf("\"gas\":false") != -1)
+          {
             serverGasStatus = false;
           }
 
           // Parse sensor availability status
-          if (response.indexOf("\"fireAvail\":true") != -1) {
+          if (response.indexOf("\"fireAvail\":true") != -1)
+          {
             fireAvail = true;
-          } else if (response.indexOf("\"fireAvail\":false") != -1) {
+          }
+          else if (response.indexOf("\"fireAvail\":false") != -1)
+          {
             fireAvail = false;
           }
 
-          if (response.indexOf("\"gasAvail\":true") != -1) {
+          if (response.indexOf("\"gasAvail\":true") != -1)
+          {
             gasAvail = true;
-          } else if (response.indexOf("\"gasAvail\":false") != -1) {
+          }
+          else if (response.indexOf("\"gasAvail\":false") != -1)
+          {
             gasAvail = false;
           }
 
-          if (response.indexOf("\"sonicAvail\":true") != -1) {
+          if (response.indexOf("\"sonicAvail\":true") != -1)
+          {
             sonicAvail = true;
-          } else if (response.indexOf("\"sonicAvail\":false") != -1) {
+          }
+          else if (response.indexOf("\"sonicAvail\":false") != -1)
+          {
             sonicAvail = false;
           }
 
           // Parse calibrated tank height from server response if available
           int idx = response.indexOf("\"tankHeight\":");
-          if (idx != -1) {
+          if (idx != -1)
+          {
             int startIdx = idx + 13;
             int endIdx = startIdx;
-            while (endIdx < response.length() && (response.charAt(endIdx) >= '0' && response.charAt(endIdx) <= '9')) {
+            while (endIdx < response.length() && (response.charAt(endIdx) >= '0' && response.charAt(endIdx) <= '9'))
+            {
               endIdx++;
             }
-            if (endIdx > startIdx) {
+            if (endIdx > startIdx)
+            {
               int serverTankHeight = response.substring(startIdx, endIdx).toInt();
-              if (serverTankHeight >= 2 && serverTankHeight <= 400 && serverTankHeight != TANK_HEIGHT) {
+              if (serverTankHeight >= 2 && serverTankHeight <= 400 && serverTankHeight != TANK_HEIGHT)
+              {
                 TANK_HEIGHT = serverTankHeight;
                 preferences.begin("wifi", false);
                 preferences.putInt("tank_height", TANK_HEIGHT);
@@ -982,16 +1147,25 @@ void loop() {
               }
             }
           }
-
-        } else {
+        }
+        else
+        {
           Serial.print("Error code in POST request: ");
           Serial.println(httpResponseCode);
         }
         http.end();
-      } else {
+
+        // Reset the physical-toggle flag after one successful update attempt
+        // to avoid repeated POSTs caused by the same button press.
+        stateChanged = false;
+      }
+      else
+      {
         Serial.println("Failed to initiate HTTP/HTTPS connection!");
       }
-    } else {
+    }
+    else
+    {
       Serial.println("WiFi Disconnected!");
     }
   }
