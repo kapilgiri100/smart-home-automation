@@ -20,7 +20,7 @@
  *   - Switch 6 (Light Bulb 4)        -> Pin D17 (Internal Pullup, expansion)
  * - Sensors:
  *   - MQ-2 Gas Sensor        -> Pin D34 (Analog input or Digital input)
- *   - Flame Sensor           -> Pin D35 (Digital input)
+*   - Flame Sensor (AO)      -> Pin D35 (Analog input, ADC1_CH7)
  *   - HC-SR04 Ultrasonic (Water level):
  *     - Trig Pin             -> Pin D25
  *     - Echo Pin             -> Pin D26
@@ -90,7 +90,7 @@ void scanLocalNetworks() {
 #define SWITCH_SOCKET 13
 
 #define PIN_GAS       34
-#define PIN_FLAME     35
+#define PIN_FLAME     35  // AO (Analog Output) of flame sensor -> ADC1_CH7
 
 // Ultrasonic Sensor Pins (standard 4-wire mode)
 #define US_TRIG       25
@@ -102,6 +102,43 @@ void scanLocalNetworks() {
 // Physical parameters
 int TANK_HEIGHT = 100; // Tank height in cm (adjustable)
 const unsigned long UPDATE_INTERVAL = 1500; // Send update every 1.5 seconds
+
+// ============================================================
+// Flame Sensor Anti-Sunlight Filter (Analog + Flicker)
+// ------------------------------------------------------------
+// Real flames flicker due to turbulent combustion: the IR
+// intensity oscillates at roughly 1-10 Hz. Sunlight, however,
+// produces a STEADY (non-flickering) IR signal. A naive single
+// digital read cannot distinguish them, causing false fire
+// alarms when sunlight hits the sensor.
+//
+// We therefore sample the sensor's ANALOG output (AO -> GPIO35,
+// ADC1_CH7) every FLAME_SAMPLE_INTERVAL_MS into a sliding window
+// of FLAME_WINDOW_SIZE samples. FIRE is confirmed only when BOTH:
+//   1. The analog IR intensity is strong (enough samples above
+//      FLAME_HIGH_THRESHOLD), AND
+//   2. The signal actually FLICKERS (>= FLAME_MIN_FLICKER
+//      HIGH<->LOW transitions within the window).
+// Once confirmed, the fire remains "active" for a further
+// FLAME_CONFIRM_MS (debounce/hold) so brief dropouts don't
+// cause alarm chattering.
+// ============================================================
+const int FLAME_HIGH_THRESHOLD = 600;        // ADC raw (0-4095). Above this = strong IR source (fire/sun)
+const int FLAME_MIN_HIGH_SAMPLES = 20;       // Min samples (out of window) above threshold to qualify as strong IR
+const int FLAME_MIN_FLICKER = 4;             // Min HIGH<->LOW transitions in window -> proves flicker (real flame)
+const int FLAME_WINDOW_SIZE = 50;            // ~2 seconds of samples at 40ms interval
+const unsigned long FLAME_SAMPLE_INTERVAL_MS = 40;
+const unsigned long FLAME_CONFIRM_MS = 3000; // Hold confirmed fire for 3s after last positive flicker window
+
+// Flame filter runtime state
+unsigned long lastFlameSampleTime = 0;
+int flameSamples[FLAME_WINDOW_SIZE];         // Ring buffer of recent raw analog readings
+int flameSampleIndex = 0;
+int flameHighCount = 0;                      // Samples above FLAME_HIGH_THRESHOLD in current window
+int flameTransitions = 0;                    // HIGH<->LOW transitions in current window
+bool flameLastHigh = false;                  // Previous sample's HIGH/LOW classification
+unsigned long lastFlameConfirmTime = 0;
+bool fireDetected = false;                   // Flicker-confirmed fire (default: no fire)
 
 // Last known physical states to detect local changes
 bool lastSwitchLightState = HIGH;
@@ -359,7 +396,8 @@ void setup() {
   // Initialize sensors
   pinMode(PIN_GAS, INPUT);
   analogSetAttenuation(ADC_11db); // Configure 11dB attenuation for 0-3.3V full-scale range on ESP32 ADC
-  pinMode(PIN_FLAME, INPUT);
+  // PIN_FLAME (GPIO 35 = ADC1_CH7) used in analog mode (no pinMode needed, but set for clarity)
+  pinMode(PIN_FLAME, INPUT);      // Analog input (ADC) for flame sensor AO
   pinMode(US_TRIG, OUTPUT);
   digitalWrite(US_TRIG, LOW);
   pinMode(US_ECHO, INPUT);
@@ -438,6 +476,82 @@ int getWaterLevelPercentage() {
   if (percentage > 100) percentage = 100;
 
   return percentage;
+}
+
+// ============================================================
+// Non-blocking flame sensor flicker filter.
+// Called every loop iteration. Samples the analog AO pin into
+// a sliding window, counts transitions, and updates fireDetected.
+// ============================================================
+void sampleFlameFlicker() {
+  unsigned long now = millis();
+  if (now - lastFlameSampleTime < FLAME_SAMPLE_INTERVAL_MS) {
+    return; // Not yet time for next sample
+  }
+  lastFlameSampleTime = now;
+
+  // Read analog value from flame sensor AO pin (ADC1_CH7, 0-4095)
+  int raw = analogRead(PIN_FLAME);
+
+  // Store in ring buffer
+  int oldVal = flameSamples[flameSampleIndex];
+  flameSamples[flameSampleIndex] = raw;
+  flameSampleIndex = (flameSampleIndex + 1) % FLAME_WINDOW_SIZE;
+
+  // Classify this sample as HIGH (strong IR) or LOW (weak IR)
+  bool isHigh = (raw >= FLAME_HIGH_THRESHOLD);
+
+  // Update HIGH count (add current, subtract old)
+  bool oldHigh = (oldVal >= FLAME_HIGH_THRESHOLD);
+  if (isHigh) flameHighCount++;
+  if (oldHigh) flameHighCount--;
+
+  // Track transitions using the persistent last classification:
+  // each time the HIGH/LOW state changes between consecutive samples,
+  // we increment the flicker counter (real flames oscillate; sunlight does not).
+  if (isHigh != flameLastHigh) {
+    flameTransitions++;
+    flameLastHigh = isHigh;
+  }
+
+  // When the ring buffer has wrapped at least once, we have a full window.
+  // We can now evaluate the window to confirm fire.
+  if (flameSampleIndex == 0) {
+    // The ring buffer just wrapped; we have FLAME_WINDOW_SIZE valid samples.
+    // Evaluate: strong IR (enough high samples) AND flicker (enough transitions)?
+    bool hasStrongIR = (flameHighCount >= FLAME_MIN_HIGH_SAMPLES);
+    bool hasFlicker = (flameTransitions >= FLAME_MIN_FLICKER);
+
+    if (hasStrongIR && hasFlicker) {
+      // Real flame confirmed
+      lastFlameConfirmTime = now;
+      if (!fireDetected) {
+        fireDetected = true;
+        Serial.print("[FLAME FILTER] FIRE CONFIRMED! Strong IR=");
+        Serial.print(flameHighCount);
+        Serial.print("/");
+        Serial.print(FLAME_WINDOW_SIZE);
+        Serial.print(" samples, flicker=");
+        Serial.print(flameTransitions);
+        Serial.println(" transitions (sunlight rejected)");
+      }
+    } else if (hasStrongIR && !hasFlicker) {
+      // Strong IR but no flicker -> STEADY sunlight rejected
+      if (fireDetected) {
+        // Only print if we were previously in fire state (transition out)
+        Serial.println("[FLAME FILTER] Sunlight rejected (steady IR, no flicker)");
+      }
+    }
+
+    // Reset transition counter for next window
+    flameTransitions = 0;
+  }
+
+  // Apply hold time: once confirmed, fire stays active for FLAME_CONFIRM_MS
+  if (fireDetected && (now - lastFlameConfirmTime > FLAME_CONFIRM_MS)) {
+    fireDetected = false;
+    Serial.println("[FLAME FILTER] Fire cleared (hold timer expired)");
+  }
 }
 
 void loop() {
@@ -608,9 +722,10 @@ void loop() {
     }
   }
 
-  // 2. Read Safety Sensors
-  // Flame Sensor outputs HIGH when fire is detected (Active High)
-  bool fireDetected = (digitalRead(PIN_FLAME) == HIGH);
+// 2. Read Safety Sensors
+  // Flame Sensor (AO, analog): sampled via non-blocking flicker filter
+  // Rejects steady sunlight; only confirms fire when IR flickers (real flame).
+  sampleFlameFlicker();
   
   // MQ-2 Gas Sensor: Take 8-sample average to filter out ADC noise spikes
   int gasSum = 0;

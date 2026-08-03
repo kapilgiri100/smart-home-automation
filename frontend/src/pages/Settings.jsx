@@ -184,9 +184,9 @@ export const Settings = () => {
     gpio: "GPIO 17",
     mode: "INPUT (Internal Pullup)"
   }, {
-    peripheral: "Flame Sensor (Digital)",
-    gpio: "GPIO 35",
-    mode: "INPUT (Active High = fire)"
+peripheral: "Flame Sensor (AO, Analog)",
+    gpio: "GPIO 35 (ADC1_CH7)",
+    mode: "INPUT (Analog, flicker-filtered, rejects sunlight)"
   }, {
     peripheral: "MQ-2 Gas Sensor (Analog)",
     gpio: "GPIO 34",
@@ -306,9 +306,9 @@ export const Settings = () => {
                     <Flame className="h-5 w-5" />
                   </div>
                   <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-white">Fire / Flame Sensor</h3>
+<h3 className="text-xs font-bold uppercase tracking-wider text-white">Fire / Flame Sensor</h3>
                     <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                      Monitors physical IR flame wavelengths. If disconnected, toggle OFF to suppress fire alerts and extinguisher actions.
+                      Reads the analog AO pin (GPIO 35, ADC1_CH7). Uses a flicker filter that rejects steady sunlight — only confirms fire when the IR signal oscillates (real flame flicker).
                     </p>
                   </div>
                 </div>

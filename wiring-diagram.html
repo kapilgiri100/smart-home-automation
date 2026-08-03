@@ -179,7 +179,7 @@
       <!-- Sensors -->
       <rect class="component" x="760" y="390" width="230" height="240" fill="#1e293b" stroke="#22d3ee" rx="8" />
       <text x="875" y="412" text-anchor="middle" class="comp-label" fill="#22d3ee" font-weight="700">SENSORS</text>
-      <text x="875" y="440" class="comp-label" fill="#22d3ee">🔥 Flame Sensor → D35 (Digital)</text>
+<text x="875" y="440" class="comp-label" fill="#22d3ee">🔥 Flame Sensor (AO) → D35 (ADC1_CH7)</text>
       <text x="875" y="466" class="comp-label" fill="#22d3ee">⚠️ MQ-2 Gas → D34 (Analog)</text>
       <text x="875" y="505" class="comp-label" fill="#22d3ee">📏 HC-SR04 Trig → D25</text>
       <text x="875" y="528" class="comp-label" fill="#22d3ee">📏 HC-SR04 Echo → D26</text>
@@ -229,7 +229,7 @@
         <tr><td>Physical Switch 5 — Light Bulb 3 (expansion)</td><td class="code" style="color:#34d399;">GPIO 16</td><td>INPUT (Internal Pullup)</td><td><span class="badge badge-manual">Manual</span></td></tr>
         <tr><td>Physical Switch 6 — Light Bulb 4 (expansion)</td><td class="code" style="color:#34d399;">GPIO 17</td><td>INPUT (Internal Pullup)</td><td><span class="badge badge-manual">Manual</span></td></tr>
         <tr><td>MQ-2 Gas Sensor (Analog)</td><td class="code" style="color:#22d3ee;">GPIO 34</td><td>INPUT (Analog, 11dB atten)</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
-        <tr><td>Flame Sensor (Digital)</td><td class="code" style="color:#22d3ee;">GPIO 35</td><td>INPUT (Active High = fire)</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
+        <tr><td>Flame Sensor (AO, Analog)</td><td class="code" style="color:#22d3ee;">GPIO 35 (ADC1_CH7)</td><td>INPUT (Analog, flicker-filtered, rejects sunlight)</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
         <tr><td>HC-SR04 Ultrasonic — TRIG</td><td class="code" style="color:#22d3ee;">GPIO 25</td><td>OUTPUT</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
         <tr><td>HC-SR04 Ultrasonic — ECHO</td><td class="code" style="color:#22d3ee;">GPIO 26</td><td>INPUT</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
         <tr><td>Active Buzzer Relay (Alarm)</td><td class="code" style="color:#f87171;">GPIO 27</td><td>OUTPUT (Active Low = sound)</td><td><span class="badge badge-safety">Safety</span></td></tr>

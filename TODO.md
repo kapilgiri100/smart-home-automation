@@ -1,5 +1,49 @@
 # Smart Home Automation - Task List
 
+## ✅ COMPLETED: Fix Flame Sensor Sunlight False-Positive (Analog + Flicker Filter)
+
+### Problem
+The IR flame sensor (GPIO 35) detected sunlight as fire. A single digital read cannot distinguish
+sunlight (constant IR) from a real flame (flickering IR), so the system triggered false fire alarms
+whenever sunlight hit the sensor.
+
+### Solution
+- Read the flame sensor's **ANALOG output (AO)** on GPIO 35 (ADC1_CH7).
+- Use a non-blocking **flicker filter**: FIRE is confirmed only when the IR intensity is strong
+  **AND** the analog signal flickers (HIGH↔LOW transitions). Real flames flicker at ~1-10 Hz due to
+  turbulent combustion; sunlight produces a steady, non-flickering signal and is rejected.
+
+### Implementation Steps - ALL COMPLETED ✅
+
+#### Step 1: esp32/main.ino - Firmware
+- [x] Header comments updated to document AO wiring (ADC1_CH7)
+- [x] Added flame filter constants (sample interval, window size, IR threshold, min flicker, hold time)
+- [x] Added flame filter state variables
+- [x] Added non-blocking `sampleFlameFlicker()` function (called every loop)
+- [x] Replaced naive `digitalRead(PIN_FLAME)` with flicker-confirmed detection
+- [x] setup() documents GPIO 35 as ADC input
+- [x] Serial debug output on fire confirm / steady-IR rejection / fire clear
+
+#### Step 2: frontend/src/pages/Settings.jsx - Documentation
+- [x] Fire/Flame sensor card description mentions analog AO + flicker filtering (sunlight ignored)
+- [x] Pinout table row updated to "Flame Sensor (Analog, AO)" / ADC1_CH7 / flicker-filtered
+
+#### Step 3: wiring-diagram.html - Documentation
+- [x] SVG sensor label updated: Flame Sensor → D35 (AO / ADC)
+- [x] Pinout table row updated to Analog / ADC1_CH7 / flicker-filtered
+- [x] Added hardware note: connect flame sensor AO pin to GPIO 35 (move wire from DO to AO)
+
+### Verification
+- [x] Backend unchanged; no server.js edits required
+- [x] Frontend `npx vite build` PASSED
+- [x] main.ino manually reviewed for syntax (arduino-cli not available)
+
+### ⚠️ Hardware Note
+Connect the flame sensor's **AO (Analog Output)** pin to **GPIO 35** (DO is no longer used).
+If any false positives persist after flashing, raise `FLAME_HIGH_THRESHOLD` and/or
+`FLAME_MIN_FLICKER` at the top of `esp32/main.ino`.
+
+---
 ## ✅ COMPLETED: Dashboard UI - Separate Manual & Automated Appliances
 
 ### Problem
