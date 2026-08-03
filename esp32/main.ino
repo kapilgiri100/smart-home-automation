@@ -11,13 +11,13 @@
  *   - Relay 4 (Light Bulb 4)          -> Pin D33 (expansion)
  *   - Relay 5 (Overhead Fill Pump)    -> Pin D21 (Automated)
  *   - Relay 6 (Fire Extinguisher Pump)-> Pin D22 (Automated)
- * - 6 Physical Switches:
+* - 4 Physical Switches (manual control ONLY for the four light bulbs):
  *   - Switch 1 (Light Bulb 1)        -> Pin D4  (Internal Pullup)
  *   - Switch 2 (Light Bulb 2)        -> Pin D5  (Internal Pullup)
- *   - Switch 3 (Overhead Fill Pump)  -> Pin D12 (Internal Pullup)
- *   - Switch 4 (Fire Extinguisher Pump) -> Pin D13 (Internal Pullup)
- *   - Switch 5 (Light Bulb 3)        -> Pin D16 (Internal Pullup, expansion)
- *   - Switch 6 (Light Bulb 4)        -> Pin D17 (Internal Pullup, expansion)
+ *   - Switch 3 (Light Bulb 3)        -> Pin D16 (Internal Pullup, expansion)
+ *   - Switch 4 (Light Bulb 4)        -> Pin D17 (Internal Pullup, expansion)
+ *   (The Overhead Fill Pump D12 and Fire Pump D13 are NO LONGER used as
+ *    physical switches — the pumps are fully AUTOMATED.)
  * - Sensors:
  *   - MQ-2 Gas Sensor        -> Pin D34 (Analog input or Digital input)
  *   - Flame Sensor (AO)      -> Pin D35 (Analog input, ADC1_CH7)
@@ -86,8 +86,6 @@ void scanLocalNetworks() {
 #define SWITCH_FAN    5
 #define SWITCH_BULB3  16
 #define SWITCH_BULB4  17
-#define SWITCH_TV     12
-#define SWITCH_SOCKET 13
 
 #define PIN_GAS       34
 #define PIN_FLAME     35  // AO (Analog Output) of flame sensor -> ADC1_CH7
@@ -164,8 +162,6 @@ bool fireDetected = false;                     // Latched flicker-confirmed fire
 // Last known physical states to detect local changes
 bool lastSwitchLightState = HIGH;
 bool lastSwitchFanState = HIGH;
-bool lastSwitchTvState = HIGH;
-bool lastSwitchSocketState = HIGH;
 bool lastSwitchBulb3State = HIGH;
 bool lastSwitchBulb4State = HIGH;
 
@@ -173,14 +169,10 @@ bool lastSwitchBulb4State = HIGH;
 const unsigned long DEBOUNCE_DELAY = 300; // 300ms debounce window
 unsigned long debounceLightTime = 0;
 unsigned long debounceFanTime = 0;
-unsigned long debounceTvTime = 0;
-unsigned long debounceSocketTime = 0;
 unsigned long debounceBulb3Time = 0;
 unsigned long debounceBulb4Time = 0;
 bool switchLightPressed = false;
 bool switchFanPressed = false;
-bool switchTvPressed = false;
-bool switchSocketPressed = false;
 bool switchBulb3Pressed = false;
 bool switchBulb4Pressed = false;
 
@@ -406,13 +398,11 @@ void setup() {
   digitalWrite(PIN_LED, HIGH);   // LED relay OFF
   digitalWrite(PIN_BUZZER, HIGH); // Buzzer relay OFF
 
-  // Initialize switches with pullups
+// Initialize switches with pullups (only the 4 light-bulb switches)
   pinMode(SWITCH_LIGHT, INPUT_PULLUP);
   pinMode(SWITCH_FAN, INPUT_PULLUP);
   pinMode(SWITCH_BULB3, INPUT_PULLUP);
   pinMode(SWITCH_BULB4, INPUT_PULLUP);
-  pinMode(SWITCH_TV, INPUT_PULLUP);
-  pinMode(SWITCH_SOCKET, INPUT_PULLUP);
 
   // Initialize sensors
   pinMode(PIN_GAS, INPUT);
@@ -662,12 +652,11 @@ void loop() {
   }
 
   // 1. Read Physical Switches & Detect Changes (Toggle action)
+  // Only the four light-bulb switches are active. The pumps are automated-only.
   bool switchLight = digitalRead(SWITCH_LIGHT);
   bool switchFan = digitalRead(SWITCH_FAN);
   bool switchBulb3 = digitalRead(SWITCH_BULB3);
   bool switchBulb4 = digitalRead(SWITCH_BULB4);
-  bool switchTv = digitalRead(SWITCH_TV);
-  bool switchSocket = digitalRead(SWITCH_SOCKET);
 
   bool stateChanged = false;
   unsigned long now = millis();
@@ -741,41 +730,11 @@ void loop() {
     }
   }
 
-  // --- TV Switch (Debounced) ---
-  if (switchTv == LOW) {
-    if (!switchTvPressed && (now - debounceTvTime > DEBOUNCE_DELAY)) {
-      switchTvPressed = true;
-      debounceTvTime = now;
-      tvState = !tvState;
-      digitalWrite(RELAY_WATER_PUMP, tvState ? LOW : HIGH);
-      stateChanged = true;
-      Serial.println("Physical Switch: Overhead Pump Toggled!");
-    }
-  } else {
-    if (switchTvPressed) {
-      switchTvPressed = false;
-      debounceTvTime = now;
-    }
-  }
+// NOTE: Physical switch control is ONLY for the four light bulbs (Light, Fan, Bulb3, Bulb4).
+  // The Overhead Fill Pump and Fire Extinguisher Pump are fully AUTOMATED (water level / fire
+  // detection / web dashboard) and are NOT controlled by physical switches.
 
-  // --- Socket Switch (Debounced) ---
-  if (switchSocket == LOW) {
-    if (!switchSocketPressed && (now - debounceSocketTime > DEBOUNCE_DELAY)) {
-      switchSocketPressed = true;
-      debounceSocketTime = now;
-      socketState = !socketState;
-      digitalWrite(RELAY_FIRE_PUMP, socketState ? LOW : HIGH);
-      stateChanged = true;
-      Serial.println("Physical Switch: Fire Pump Toggled!");
-    }
-  } else {
-    if (switchSocketPressed) {
-      switchSocketPressed = false;
-      debounceSocketTime = now;
-    }
-  }
-
-// 2. Read Safety Sensors
+  // 2. Read Safety Sensors
   // Flame Sensor (AO, analog): sampled via non-blocking flicker filter
   // Rejects steady sunlight; only confirms fire when IR flickers (real flame).
   sampleFlameFlicker();

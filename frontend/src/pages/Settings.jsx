@@ -167,20 +167,12 @@ export const Settings = () => {
     peripheral: "Physical Switch 2 — Fan",
     gpio: "GPIO 5",
     mode: "INPUT (Internal Pullup)"
-  }, {
-    peripheral: "Physical Switch 3 — Fill Pump",
-    gpio: "GPIO 12",
-    mode: "INPUT (Internal Pullup)"
-  }, {
-    peripheral: "Physical Switch 4 — Fire Pump",
-    gpio: "GPIO 13",
-    mode: "INPUT (Internal Pullup)"
-  }, {
-    peripheral: "Physical Switch 5 — Light Bulb 3 (expansion)",
+}, {
+    peripheral: "Physical Switch 3 — Light Bulb 3 (expansion)",
     gpio: "GPIO 16",
     mode: "INPUT (Internal Pullup)"
   }, {
-    peripheral: "Physical Switch 6 — Light Bulb 4 (expansion)",
+    peripheral: "Physical Switch 4 — Light Bulb 4 (expansion)",
     gpio: "GPIO 17",
     mode: "INPUT (Internal Pullup)"
   }, {
