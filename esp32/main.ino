@@ -131,6 +131,11 @@ const unsigned long UPDATE_INTERVAL = 1500; // Send update every 1.5 seconds
 // FIRE is confirmed when the mean IR is in-band AND flicker is
 // present. This catches real flames while still rejecting steady
 // sunlight (low PP).
+//
+// Once confirmed, the fire state LATCHES so the buzzer/fire pump
+// stay active continuously during the fire (no ring-break-ring).
+// It clears after 1 no-flame window (~0.9s), so the buzzer turns OFF
+// promptly once the fire is gone (it stays ON the whole time fire is detected).
 // ============================================================
 // Tuned for robustness: cheap flame-sensor AO outputs vary widely.
 // Some modules output a voltage that RISES with IR, others DROP
@@ -140,21 +145,21 @@ const unsigned long UPDATE_INTERVAL = 1500; // Send update every 1.5 seconds
 // Real flame is confirmed only when mean is in-band AND the signal
 // FLICKERS (peak-to-peak or relative flicker ratio).
 const int FLAME_IR_MEAN_MIN = 40;              // ADC avg below this = disconnected / pinned low (no signal)
-const int FLAME_IR_MEAN_MAX = 3900;            // ADC avg above this = pinned high / pure ambient (no signal change)
+const int FLAME_IR_MEAN_MAX = 4090;            // ADC avg above this = pinned at rail; flicker is still the discriminator
 const int FLAME_FLICKER_PP_THRESHOLD = 25;     // Absolute peak-to-peak ADC variation -> flicker (real flame)
 const int FLAME_FLICKER_RATIO_X1000 = 25;      // Relative flicker: PP*1000/mean >= this (catches small-swing flames)
 const int FLAME_WINDOW_SIZE = 30;              // Samples per evaluation window (~0.9s at 30ms) - responsive
 const unsigned long FLAME_SAMPLE_INTERVAL_MS = 30;
-const unsigned long FLAME_CONFIRM_MS = 1500;   // Hold confirmed fire for 1.5s after last positive window
+const int FLAME_CLEAR_WINDOWS = 1;             // Clear fire after 1 no-flame window (~0.9s): buzzer OFF promptly when no fire
 const unsigned long FLAME_DEBUG_INTERVAL_MS = 5000; // Periodic Serial debug for field tuning
 
 // Flame filter runtime state
 unsigned long lastFlameSampleTime = 0;
 int flameSamples[FLAME_WINDOW_SIZE];           // Ring buffer of recent raw analog readings
 int flameSampleIndex = 0;
-unsigned long lastFlameConfirmTime = 0;
+int flameClearWindowCount = 0;                 // Consecutive no-flame windows (to unlatch fire)
 unsigned long lastFlameDebugTime = 0;
-bool fireDetected = false;                     // Flicker-confirmed fire (default: no fire)
+bool fireDetected = false;                     // Latched flicker-confirmed fire (default: no fire)
 
 // Last known physical states to detect local changes
 bool lastSwitchLightState = HIGH;
@@ -542,8 +547,8 @@ void sampleFlameFlicker() {
                       (flickerRatio >= FLAME_FLICKER_RATIO_X1000);
 
     if (irInBand && hasFlicker) {
-      // Real flame confirmed (mean in-band AND flicker)
-      lastFlameConfirmTime = now;
+      // Real flame confirmed (mean in-band AND flicker) -> latch ON
+      flameClearWindowCount = 0;   // Reset the unlatch counter
       if (!fireDetected) {
         fireDetected = true;
         Serial.print("[FLAME FILTER] FIRE CONFIRMED! mean=");
@@ -554,10 +559,18 @@ void sampleFlameFlicker() {
         Serial.print(flickerRatio);
         Serial.println();
       }
-    } else if (irInBand && !hasFlicker) {
-      // IR in-band but zero flicker -> steady sunlight rejected
-      if (fireDetected) {
-        Serial.print("[FLAME FILTER] Sunlight rejected (steady IR, mean=");
+    } else {
+      // No flame in this window (out-of-band OR no flicker).
+      // To avoid a ring-break-ring stutter from a momentary flicker
+      // lull or a brief saturation, we do NOT unlatch immediately.
+      // We only unlatch after FLAME_CLEAR_WINDOWS consecutive
+      // no-flame windows (~0.9s), so the buzzer turns OFF promptly
+      // once the fire is gone.
+      flameClearWindowCount++;
+      if (fireDetected && flameClearWindowCount >= FLAME_CLEAR_WINDOWS) {
+        fireDetected = false;
+        flameClearWindowCount = 0;
+        Serial.print("[FLAME FILTER] Fire cleared after sustained absence (mean=");
         Serial.print(mean);
         Serial.print(", PP=");
         Serial.println(peakToPeak);
@@ -587,14 +600,10 @@ void sampleFlameFlicker() {
     Serial.print(latestPP);
     Serial.print(" ratio=");
     Serial.print(latestMean > 0 ? (latestPP * 1000 / latestMean) : 0);
+    Serial.print(" clear_count=");
+    Serial.print(fireDetected ? flameClearWindowCount : 0);
     Serial.print(" fire=");
     Serial.println(fireDetected ? "YES" : "no");
-  }
-
-  // Apply hold time: once confirmed, fire stays active for FLAME_CONFIRM_MS
-  if (fireDetected && (now - lastFlameConfirmTime > FLAME_CONFIRM_MS)) {
-    fireDetected = false;
-    Serial.println("[FLAME FILTER] Fire cleared (hold timer expired)");
   }
 }
 

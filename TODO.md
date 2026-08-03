@@ -1,19 +1,28 @@
 # Smart Home Automation - Task List
 
-## ✅ COMPLETED: Fix Flame Sensor Sunlight False-Positive (Analog + Flicker) v3
+## ✅ COMPLETED: Fix Flame Sensor Sunlight False-Positive + Buzzer Stutter (Analog + Flicker Filter + Latching)
 
 ### Problem
-The IR flame sensor (GPIO 35) detected sunlight as fire. A single digital read cannot distinguish
-sunlight (constant IR) from a real flame (flickering IR), so the system triggered false fire alarms
-whenever sunlight hit the sensor.
+1. **Sunlight false-positive:** The IR flame sensor (GPIO 35) detected sunlight as fire. A single
+   digital read cannot distinguish sunlight (constant IR) from a real flame (flickering IR), so the
+   system triggered false fire alarms whenever sunlight hit the sensor.
+2. **Buzzer ring-break-ring stutter:** The first flicker filter used a short 1.5s hold timer. Real
+   flames have momentary flicker lulls / brief AO saturation, so the fire state dropped and the
+   buzzer cut out mid-fire ("ring → break → ring").
+3. **Missed fires (v2):** A fixed high-level count + transition-count threshold missed fires when
+   the AO signal saturated or swung only a small amount.
 
 ### Solution
 - Read the flame sensor's **ANALOG output (AO)** on GPIO 35 (ADC1_CH7).
-- **v3 (polarity-independent mean-band + flicker ratio)**: FIRE is confirmed when the mean IR is
-  within an operating band (works with sensors whose AO RISES or FALLS with IR, and rejects
-  saturated/too-bright sunlight) AND the signal flickers (absolute peak-to-peak variation OR a
-  relative flicker ratio `PP*1000/mean` for small-swing sensors). Real flames flicker at ~1-10 Hz
-  due to turbulent combustion; sunlight produces a steady, non-flickering signal and is rejected.
+- **v3 (polarity-independent mean-band + flicker ratio):** FIRE is confirmed when the mean IR is
+  within an operating band (works with sensors whose AO RISES or FALLS with IR) AND the signal
+  flickers (absolute peak-to-peak variation ≥ 25 OR relative flicker ratio `PP*1000/mean` ≥ 25).
+  Real flames flicker at ~1-10 Hz; steady sunlight does not.
+- **Latching (keeps buzzer ON during fire, OFF when no fire):** Once confirmed, `fireDetected`
+  LATCHES ON so the buzzer/fire pump stay active continuously through the whole fire (no ring-break-ring).
+  It clears after 1 no-flame window (`FLAME_CLEAR_WINDOWS = 1`, ~0.9s), so the buzzer turns OFF
+  promptly once the fire is gone. `FLAME_IR_MEAN_MAX` widened to 4090 so a close/bright flame that
+  saturates AO still qualifies via flicker.
 
 ### Why v3?
 - v1 (single digital read) → false positives on sunlight.
@@ -21,33 +30,36 @@ whenever sunlight hit the sensor.
   sensor saturates on a close/bright flame or when the AO output swings only a small amount.
 - v3 uses a mean "band" (polarity-independent) + low peak-to-peak threshold + relative flicker
   ratio, catching real flames reliably while still rejecting steady sunlight.
+- Latching avoids momentary-drop buzzer stutter (continuous alarm until fire truly cleared).
 
 ### Implementation Steps - ALL COMPLETED ✅
 
 #### Step 1: esp32/main.ino - Firmware
-- [x] Header comments updated to document AO wiring (ADC1_CH7)
-- [x] Added flame filter constants (mean min/max band, peak-to-peak threshold, relative flicker ratio, window, hold)
-- [x] Added flame filter state variables (ring buffer, timestamps)
+- [x] Header comments updated to document AO wiring (ADC1_CH7) and latching behavior
+- [x] Added flame filter constants (mean min/max band, peak-to-peak threshold, relative flicker ratio, window, clear windows)
+- [x] Added flame filter state variables (ring buffer, timestamps, `flameClearWindowCount`, `fireDetected` latch)
 - [x] Added non-blocking `sampleFlameFlicker()` function (called every loop)
 - [x] v3 algorithm: computes mean IR (band check) + peak-to-peak + relative flicker ratio over sliding window
 - [x] Replaced naive `digitalRead(PIN_FLAME)` with flicker-confirmed detection
+- [x] Replaced 1.5s hold timer with consecutive-clear latching (`FLAME_CLEAR_WINDOWS = 5`)
 - [x] setup() documents GPIO 35 as ADC input
-- [x] Serial debug output on fire confirm / steady-IR rejection / periodic tuning stats
+- [x] Serial debug output on fire confirm / fire clear / periodic tuning stats
 
 #### Step 2: frontend/src/pages/Settings.jsx - Documentation
-- [x] Fire/Flame sensor card description mentions analog AO + mean/peak-to-peak flicker filtering
+- [x] Fire/Flame sensor card description mentions analog AO + mean/peak-to-peak flicker filtering + latched alarm (~4.5s)
 - [x] Pinout table row updated to "Flame Sensor (AO, Analog)" / ADC1_CH7 / flicker-filtered
 
 #### Step 3: wiring-diagram.html - Documentation
 - [x] SVG sensor label updated: Flame Sensor (AO) → D35 (ADC1_CH7)
-- [x] Pinout table row updated to Analog / ADC1_CH7 / mean + peak-to-peak flicker filter
+- [x] Pinout table row updated to Analog / ADC1_CH7 / mean + peak-to-peak flicker filter; alarm latches ~4.5s
+- [x] Added hardware note: connect flame sensor AO pin to GPIO 35 (move wire from DO to AO)
 
 ### Verification
 - [x] Backend unchanged; no server.js edits required
 - [x] Frontend `npx vite build` PASSED
 - [x] Backend `node --check server.js` PASSED
 - [x] main.ino manually reviewed for syntax (arduino-cli not available)
-- [x] No stale references to removed flame variables (flameHighCount / flameTransitions / FLAME_HIGH_THRESHOLD)
+- [x] No stale references to removed flame variables (flameHighCount / flameTransitions / FLAME_HIGH_THRESHOLD / FLAME_CONFIRM_MS / lastFlameConfirmTime)
 
 ### ⚠️ Hardware Note
 Connect the flame sensor's **AO (Analog Output)** pin to **GPIO 35** (DO is no longer used).
