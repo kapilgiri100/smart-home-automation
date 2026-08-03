@@ -13,9 +13,11 @@
  *   - Relay 6 (Fire Extinguisher Pump)-> Pin D22 (Automated)
  * - 4 Physical Switches (manual control ONLY for the four light bulbs):
  *   - Switch 1 (Light Bulb 1)        -> Pin D4  (Internal Pullup)
- *   - Switch 2 (Light Bulb 2)        -> Pin D5  (Internal Pullup)
- *   - Switch 3 (Light Bulb 3)        -> Pin D16 (Internal Pullup, expansion)
- *   - Switch 4 (Light Bulb 4)        -> Pin D17 (Internal Pullup, expansion)
+*   - Switch 2 (Light Bulb 2)        -> Pin D5  (Internal Pullup)
+ *   - Switch 3 (Light Bulb 3)        -> Pin D13 (Internal Pullup, expansion)
+ *   - Switch 4 (Light Bulb 4)        -> Pin D23 (Internal Pullup, expansion)
+ *   (NOTE: GPIO 16/17 are NOT used because they are hard-wired to the
+ *    PSRAM chip on ESP32-WROVER modules and cannot act as GPIO.)
  *   (The Overhead Fill Pump D12 and Fire Pump D13 are NO LONGER used as
  *    physical switches — the pumps are fully AUTOMATED.)
  * - Sensors:
@@ -87,8 +89,8 @@ void scanLocalNetworks()
 
 #define SWITCH_LIGHT 4
 #define SWITCH_FAN 5
-#define SWITCH_BULB3 16
-#define SWITCH_BULB4 17
+#define SWITCH_BULB3 13
+#define SWITCH_BULB4 23
 
 #define PIN_GAS 34
 #define PIN_FLAME 35 // AO (Analog Output) of flame sensor -> ADC1_CH7

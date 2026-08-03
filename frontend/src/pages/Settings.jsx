@@ -168,12 +168,12 @@ export const Settings = () => {
     gpio: "GPIO 5",
     mode: "INPUT (Internal Pullup)"
 }, {
-    peripheral: "Physical Switch 3 — Light Bulb 3 (expansion)",
-    gpio: "GPIO 16",
+peripheral: "Physical Switch 3 — Light Bulb 3 (expansion)",
+    gpio: "GPIO 13",
     mode: "INPUT (Internal Pullup)"
   }, {
     peripheral: "Physical Switch 4 — Light Bulb 4 (expansion)",
-    gpio: "GPIO 17",
+    gpio: "GPIO 23",
     mode: "INPUT (Internal Pullup)"
   }, {
 peripheral: "Flame Sensor (AO, Analog)",

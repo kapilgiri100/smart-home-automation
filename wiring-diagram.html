@@ -112,10 +112,10 @@
       <!-- Board pins (right side - switches & sensors) -->
       <rect class="pin-box" x="628" y="230" width="34" height="16" /><text class="pin-label" x="632" y="241">D4</text>
       <rect class="pin-box" x="628" y="262" width="34" height="16" /><text class="pin-label" x="632" y="273">D5</text>
-      <rect class="pin-box" x="628" y="294" width="34" height="16" /><text class="pin-label" x="632" y="305">D16</text>
-      <rect class="pin-box" x="628" y="326" width="34" height="16" /><text class="pin-label" x="632" y="337">D17</text>
+<rect class="pin-box" x="628" y="294" width="34" height="16" /><text class="pin-label" x="632" y="305">D13</text>
+      <rect class="pin-box" x="628" y="326" width="34" height="16" /><text class="pin-label" x="632" y="337">D23</text>
       <rect class="pin-box" x="628" y="358" width="34" height="16" /><text class="pin-label" x="632" y="369">D12</text>
-      <rect class="pin-box" x="628" y="390" width="34" height="16" /><text class="pin-label" x="632" y="401">D13</text>
+      <rect class="pin-box" x="628" y="390" width="34" height="16" /><text class="pin-label" x="632" y="401">D16</text>
       <rect class="pin-box" x="628" y="422" width="34" height="16" /><text class="pin-label" x="632" y="433">D25</text>
       <rect class="pin-box" x="628" y="454" width="34" height="16" /><text class="pin-label" x="632" y="465">D26</text>
       <rect class="pin-box" x="628" y="486" width="34" height="16" /><text class="pin-label" x="632" y="497">D34</text>
@@ -165,8 +165,8 @@
       <text x="875" y="192" text-anchor="middle" class="comp-label" fill="#34d399" font-weight="700">4× PHYSICAL SWITCHES</text>
       <text x="875" y="215" class="comp-label" fill="#34d399">Switch 1 → Light Bulb 1 (D4)</text>
       <text x="875" y="238" class="comp-label" fill="#34d399">Switch 2 → Light Bulb 2 (D5)</text>
-      <text x="875" y="261" class="comp-label" fill="#34d399">Switch 3 → Light Bulb 3 (D16)*</text>
-      <text x="875" y="284" class="comp-label" fill="#34d399">Switch 4 → Light Bulb 4 (D17)*</text>
+<text x="875" y="261" class="comp-label" fill="#34d399">Switch 3 → Light Bulb 3 (D13)*</text>
+      <text x="875" y="284" class="comp-label" fill="#34d399">Switch 4 → Light Bulb 4 (D23)*</text>
       <text x="875" y="310" text-anchor="middle" class="comp-label" fill="#94a3b8">INPUT_PULLUP (GND on press)</text>
       <text x="875" y="326" text-anchor="middle" class="comp-label" fill="#64748b">Pumps are AUTOMATED (no switch)</text>
 
@@ -223,10 +223,10 @@
         <tr><td>Relay 6 — Fire Extinguisher Pump (Pump 2)</td><td class="code" style="color:#fbbf24;">GPIO 22</td><td>OUTPUT (Active Low)</td><td><span class="badge badge-auto">Automated</span></td></tr>
         <tr><td>Physical Switch 1 — Light Bulb 1</td><td class="code" style="color:#34d399;">GPIO 4</td><td>INPUT (Internal Pullup)</td><td><span class="badge badge-manual">Manual</span></td></tr>
         <tr><td>Physical Switch 2 — Light Bulb 2</td><td class="code" style="color:#34d399;">GPIO 5</td><td>INPUT (Internal Pullup)</td><td><span class="badge badge-manual">Manual</span></td></tr>
-        <tr><td>Physical Switch 3 — Light Bulb 3 (expansion)</td><td class="code" style="color:#34d399;">GPIO 16</td><td>INPUT (Internal Pullup)</td><td><span class="badge badge-manual">Manual</span></td></tr>
-        <tr><td>Physical Switch 4 — Light Bulb 4 (expansion)</td><td class="code" style="color:#34d399;">GPIO 17</td><td>INPUT (Internal Pullup)</td><td><span class="badge badge-manual">Manual</span></td></tr>
+<tr><td>Physical Switch 3 — Light Bulb 3 (expansion)</td><td class="code" style="color:#34d399;">GPIO 13</td><td>INPUT (Internal Pullup)</td><td><span class="badge badge-manual">Manual</span></td></tr>
+        <tr><td>Physical Switch 4 — Light Bulb 4 (expansion)</td><td class="code" style="color:#34d399;">GPIO 23</td><td>INPUT (Internal Pullup)</td><td><span class="badge badge-manual">Manual</span></td></tr>
         <tr><td>GPIO 12 (formerly Fill Pump switch)</td><td class="code" style="color:#64748b;">GPIO 12</td><td>Not used (pump is automated)</td><td><span class="badge badge-auto">Automated</span></td></tr>
-        <tr><td>GPIO 13 (formerly Fire Pump switch)</td><td class="code" style="color:#64748b;">GPIO 13</td><td>Not used (pump is automated)</td><td><span class="badge badge-auto">Automated</span></td></tr>
+        <tr><td>GPIO 16/17 (formerly Switch 3/4)</td><td class="code" style="color:#64748b;">GPIO 16 / 17</td><td>Not used (hard-wired to PSRAM on WROVER; unreliable as GPIO)</td><td><span class="badge badge-auto">Automated</span></td></tr>
         <tr><td>MQ-2 Gas Sensor (Analog)</td><td class="code" style="color:#22d3ee;">GPIO 34</td><td>INPUT (Analog, 11dB atten)</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
 <tr><td>Flame Sensor (AO, Analog)</td><td class="code" style="color:#22d3ee;">GPIO 35 (ADC1_CH7)</td><td>INPUT (Analog, mean + peak-to-peak flicker filter, rejects sunlight; alarm latches during fire, OFF ~1s after)</td><td><span class="badge badge-sensor">Sensor</span></td></tr>
         <tr><td>HC-SR04 Ultrasonic — TRIG</td><td class="code" style="color:#22d3ee;">GPIO 25</td><td>OUTPUT</td><td><span class="badge badge-sensor">Sensor</span></td></tr>

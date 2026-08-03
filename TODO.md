@@ -1,5 +1,29 @@
 # TODO.md - Physical Switch & Buzzer Fix
 
+## Task 4: Fix Physical Switches 3 & 4 (GPIO 16/17 -> 13/23)
+
+### Root Cause
+Physical switches 3 & 4 were wired to GPIO 16 and GPIO 17. On ESP32-WROVER
+(PSRAM) modules, GPIO 16/17 are hard-wired to the PSRAM chip and cannot be
+used as GPIO — so switches 1 & 2 (GPIO 4/5) worked but switches 3 & 4 did not.
+
+### Fix
+- [x] `esp32/main.ino`: Remapped `SWITCH_BULB3` to GPIO 13 and `SWITCH_BULB4` to GPIO 23
+- [x] `frontend/src/pages/Settings.jsx`: Updated pinout table (GPIO 13 / GPIO 23)
+- [x] `wiring-diagram.html`: Updated SVG + pinout table to GPIO 13 / GPIO 23
+- [x] Updated header comment to document why GPIO 16/17 are not used
+
+### WIRING INSTRUCTION (physical)
+- Switch 3: one leg to GPIO 13, other leg to GND (internal pullup)
+- Switch 4: one leg to GPIO 23, other leg to GND (internal pullup)
+- Relays 3/4 remain on GPIO 32 / GPIO 33 (active-low)
+
+### Verification
+- [ ] Rebuild & flash `esp32/main.ino`
+- [ ] Confirm switches 3 & 4 now toggle Light Bulb 3 & 4 and sync to dashboard
+
+---
+
 ## Task 1: Physical switches only control the four light bulbs
 ## Task 2: Buzzer rings only while flame/gas is detected locally
 
