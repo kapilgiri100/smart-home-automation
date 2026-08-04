@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { Navigate } from "react-router-dom";
-import { LogIn, ShieldAlert, User, Lock, UserPlus } from "lucide-react";
+import { LogIn, ShieldAlert, User, Lock, UserPlus, BookOpen, Gauge, ChevronUp, Users, Info } from "lucide-react";
 import logoUrl from "../assets/images/logo_1783781770727.jpg";
 export const Login = () => {
   const {
@@ -22,6 +22,8 @@ export const Login = () => {
   const [signupFirst, setSignupFirst] = useState("");
   const [signupLast, setSignupLast] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
+const [showManual, setShowManual] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   if (user) {
     return <Navigate to="/" replace />;
   }
@@ -188,10 +190,170 @@ export const Login = () => {
             </button>
           </form>}
 
-        {/* Info Footer */}
+      {/* Info Footer */}
         <div className="mt-6 text-center border-t border-white/5 pt-4 text-[11px] text-slate-500">
           <span>Secured by PostgreSQL &amp; JWT session tokens</span>
         </div>
       </div>
+
+{/* User Manual & About Us toggle buttons (side by side) */}
+      <div className="w-full max-w-md grid grid-cols-2 gap-3 mt-6 relative z-10">
+        <button onClick={() => setShowManual(prev => !prev)} className="flex items-center justify-center space-x-2 py-3 px-4 rounded-xl font-medium text-white bg-slate-700 hover:bg-slate-600 transition-all cursor-pointer shadow-lg shadow-slate-500/10">
+          {showManual ? <ChevronUp className="h-4.5 w-4.5" /> : <BookOpen className="h-4.5 w-4.5" />}
+          <span>{showManual ? "Hide Manual" : "View Manual"}</span>
+        </button>
+        <button onClick={() => setShowAbout(prev => !prev)} className="flex items-center justify-center space-x-2 py-3 px-4 rounded-xl font-medium text-white bg-indigo-700 hover:bg-indigo-600 transition-all cursor-pointer shadow-lg shadow-indigo-500/10">
+          {showAbout ? <ChevronUp className="h-4.5 w-4.5" /> : <Info className="h-4.5 w-4.5" />}
+          <span>{showAbout ? "Hide About Us" : "About Us"}</span>
+        </button>
+      </div>
+
+      {/* ===== User Manual (below the login card) ===== */}
+      {showManual && <div className="w-full max-w-md mt-6 space-y-6 text-left">
+        {/* Quick Start */}
+        <div className="bg-[#16181D] border border-white/5 rounded-2xl p-6 shadow-xl relative z-10">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2 mb-4">
+            <span className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400">
+              <BookOpen className="h-4 w-4" />
+            </span>
+            User Manual &amp; Quick Start
+          </h2>
+
+          {/* Step 1 */}
+          <div className="flex items-start gap-3 mb-4">
+            <span className="shrink-0 w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-bold flex items-center justify-center border border-emerald-500/30">1</span>
+            <div>
+              <h3 className="text-xs font-semibold text-white">Create an Account</h3>
+              <p className="text-[11px] text-slate-400 leading-relaxed mt-0.5">
+                On the Log In / Sign Up tab, enter your <strong>first name</strong>, <strong>last name</strong>, and a <strong>password</strong> (min. 6 characters), then click <strong>Create Account</strong>.
+              </p>
+            </div>
+          </div>
+
+          {/* Step 2 */}
+          <div className="flex items-start gap-3 mb-4">
+            <span className="shrink-0 w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-bold flex items-center justify-center border border-emerald-500/30">2</span>
+            <div>
+              <h3 className="text-xs font-semibold text-white">Authorize Access</h3>
+              <p className="text-[11px] text-slate-400 leading-relaxed mt-0.5">
+                The first account (or the admin account) is auto-authorized. Other accounts need the <strong>authorization passcode</strong> to unlock full control of the system.
+              </p>
+            </div>
+          </div>
+
+          {/* Step 3 */}
+          <div className="flex items-start gap-3 mb-4">
+            <span className="shrink-0 w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-bold flex items-center justify-center border border-emerald-500/30">3</span>
+            <div>
+              <h3 className="text-xs font-semibold text-white">Log In to the Dashboard</h3>
+              <p className="text-[11px] text-slate-400 leading-relaxed mt-0.5">
+                Log in with your <strong>registered name</strong> and <strong>password</strong>, then click <strong>Log In to Dashboard</strong> to open the System Overview.
+              </p>
+            </div>
+          </div>
+
+          {/* Step 4 */}
+          <div className="flex items-start gap-3">
+            <span className="shrink-0 w-6 h-6 rounded-full bg-emerald-500/15 text-emerald-400 text-xs font-bold flex items-center justify-center border border-emerald-500/30">4</span>
+            <div>
+              <h3 className="text-xs font-semibold text-white">Connect Your ESP32 Device</h3>
+              <p className="text-[11px] text-slate-400 leading-relaxed mt-0.5">
+                Power on the ESP32 and connect to the <strong>Smart-Home-Setup</strong> WiFi network. Open <strong>http://192.168.4.1</strong>, select your local network, and set the backend server URL to your app's address.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Dashboard Features */}
+        <div className="bg-[#16181D] border border-white/5 rounded-2xl p-6 shadow-xl relative z-10">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2 mb-4">
+            <span className="p-1.5 bg-blue-500/10 rounded-lg text-blue-400">
+              <Gauge className="h-4 w-4" />
+            </span>
+            Dashboard Controls
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-3 bg-[#0A0B0D]/60 border border-white/5 rounded-xl">
+              <p className="text-[11px] font-bold text-white">💡 Manual Appliances</p>
+              <p className="text-[10px] text-slate-400 leading-relaxed mt-1">
+                Tap the four light bulbs to turn them ON/OFF. They can also be controlled by the four physical switches.
+              </p>
+            </div>
+            <div className="p-3 bg-[#0A0B0D]/60 border border-white/5 rounded-xl">
+              <p className="text-[11px] font-bold text-white">🚿 Automated Pumps</p>
+              <p className="text-[10px] text-slate-400 leading-relaxed mt-1">
+                Overhead fill pump auto-refills when the tank is low. Fire pump is auto-activated during a fire.
+              </p>
+            </div>
+            <div className="p-3 bg-[#0A0B0D]/60 border border-white/5 rounded-xl">
+              <p className="text-[11px] font-bold text-white">🔥 Fire &amp; Gas Safety</p>
+              <p className="text-[10px] text-slate-400 leading-relaxed mt-1">
+                Real-time alerts, buzzer, and warning LED trigger when a fire or gas leak is detected.
+              </p>
+            </div>
+            <div className="p-3 bg-[#0A0B0D]/60 border border-white/5 rounded-xl">
+              <p className="text-[11px] font-bold text-white">⏰ Schedules</p>
+              <p className="text-[10px] text-slate-400 leading-relaxed mt-1">
+                Automate appliances to turn ON/OFF at set times from the Scheduler page.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Safety Notes */}
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-6 shadow-xl relative z-10">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2 mb-3">
+            <span className="p-1.5 bg-amber-500/10 rounded-lg">
+              <ShieldAlert className="h-4 w-4" />
+            </span>
+            Safety &amp; Troubleshooting
+          </h2>
+          <ul className="space-y-2 text-[11px] text-slate-300 leading-relaxed">
+            <li className="flex gap-2"><span className="text-amber-400">•</span> Always keep low-voltage wiring and high-voltage AC wiring physically separated.</li>
+            <li className="flex gap-2"><span className="text-amber-400">•</span> If the device shows <strong>ESP32 Offline</strong>, check power and WiFi to the Smart-Home-Setup network.</li>
+            <li className="flex gap-2"><span className="text-amber-400">•</span> If a sensor is not connected, disable it in <strong>Settings</strong> to avoid false alarms.</li>
+<li className="flex gap-2"><span className="text-amber-400">•</span> The physical switches 1–4 control the four light bulbs (GPIO 4, 5, 13, 23).</li>
+          </ul>
+        </div>
+      </div>}
+
+      {/* ===== About Us (toggled separately) ===== */}
+      {showAbout && <div className="w-full max-w-md mt-6 space-y-6 text-left">
+        {/* About Us */}
+        <div className="bg-[#16181D] border border-white/5 rounded-2xl p-6 shadow-xl relative z-10">
+          <h2 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2 mb-4">
+            <span className="p-1.5 bg-indigo-500/10 rounded-lg text-indigo-400">
+              <Users className="h-4 w-4" />
+            </span>
+            About Us
+          </h2>
+          <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+            This IoT-based Smart Home Automation and Fire &amp; Gas Safety Monitoring System is a final year capstone project built by the Computer Engineering team at <strong className="text-slate-200">Mid-West University, Surkhet, Nepal</strong>.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="p-2.5 bg-[#0A0B0D]/60 border border-white/5 rounded-xl">
+              <p className="text-[11px] font-bold text-white">🧠 Lead Systems &amp; Cloud</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Kapil Giri — embedded firmware &amp; full-stack architecture</p>
+            </div>
+            <div className="p-2.5 bg-[#0A0B0D]/60 border border-white/5 rounded-xl">
+              <p className="text-[11px] font-bold text-white">🔌 Hardware &amp; Network</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Pramit Giri — ESP32 design, sensors &amp; telemetry</p>
+            </div>
+            <div className="p-2.5 bg-[#0A0B0D]/60 border border-white/5 rounded-xl">
+              <p className="text-[11px] font-bold text-white">🎨 Frontend UX</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Chandra Ghimire — interfaces &amp; data visualization</p>
+            </div>
+            <div className="p-2.5 bg-[#0A0B0D]/60 border border-white/5 rounded-xl">
+              <p className="text-[11px] font-bold text-white">🗄️ Database &amp; Backend</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Madan Bhusal — schema, logging &amp; scheduling</p>
+            </div>
+            <div className="p-2.5 bg-[#0A0B0D]/60 border border-white/5 rounded-xl">
+              <p className="text-[11px] font-bold text-white">✅ QA &amp; Documentation</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Purnima Baduwal — testing &amp; project documentation</p>
+            </div>
+          </div>
+        </div>
+      </div>}
     </div>;
 };

@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Activity, Settings, LogOut, Cpu, Wifi, User, Clock, Sliders, X, Info } from "lucide-react";
+import { LayoutDashboard, Activity, Settings, LogOut, Cpu, Wifi, User, Clock, Sliders, X } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import logoUrl from "../assets/images/logo_1783781770727.jpg";
 export const Sidebar = ({
@@ -31,14 +31,10 @@ export const Sidebar = ({
     name: "Activity Logs",
     path: "/activity",
     icon: Activity
-  }, {
+}, {
     name: "Settings",
     path: "/settings",
     icon: Settings
-  }, {
-    name: "About Us",
-    path: "/about",
-    icon: Info
   }];
   return <>
       {/* Mobile Backdrop Overlay */}
