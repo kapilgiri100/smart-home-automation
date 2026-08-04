@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import io from "socket.io-client";
 import { Flame, Droplet, Lightbulb, Tv, Zap, Activity, ShieldAlert, RefreshCw, Wifi, WifiOff, Cpu, AlertTriangle, Play, Square, Volume2, VolumeX, ListRestart, Pencil, Check, X, BellRing, Radio, SlidersHorizontal, ChevronUp } from "lucide-react";
-import { findSoundById, loadSettings } from "../utils/alarmSounds.js";
+import { loadMuteState } from "../utils/alarmSoundEngine.js";
 
 // Types
 
@@ -22,158 +22,6 @@ const FanIconComponent = ({
   </svg>;
 };
 
-// Web Audio API Synthesizer for Fire and Gas alarms
-class AlarmSoundEngine {
-  ctx = null;
-  intervalId = null;
-  isMuted = false;
-  audioEl = null;
-  constructor() { }
-  initCtx() {
-    if (!this.ctx) {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (AudioContextClass) {
-        try {
-          this.ctx = new AudioContextClass();
-        } catch (e) {
-          console.warn("Failed to initialize AudioContext", e);
-        }
-      }
-    }
-  }
-  unlock() {
-    // If ctx exists and is suspended, iOS Safari might have locked it permanently.
-    // Close and recreate inside this user gesture handler for 100% success.
-    if (this.ctx && this.ctx.state === "running") {
-      return;
-    }
-    if (this.ctx) {
-      try {
-        this.ctx.close().catch(() => { });
-      } catch (e) { }
-      this.ctx = null;
-    }
-    this.initCtx();
-    if (!this.ctx) return;
-    if (this.ctx.state === "suspended") {
-      this.ctx.resume().catch(err => {
-        console.warn("Failed to resume AudioContext during unlock:", err);
-      });
-    }
-    try {
-      // Play brief silent note to trigger iOS Safari audio activation
-      const osc = this.ctx.createOscillator();
-      const gainNode = this.ctx.createGain();
-      gainNode.gain.setValueAtTime(0.0001, this.ctx.currentTime);
-      osc.connect(gainNode);
-      gainNode.connect(this.ctx.destination);
-      osc.start(0);
-      osc.stop(0.01);
-    } catch (e) {
-      console.warn("Failed to play silent beep for unlock:", e);
-    }
-  }
-  isLocked() {
-    return !this.ctx || this.ctx.state === "suspended";
-  }
-  setMute(mute) {
-    this.isMuted = mute;
-    if (mute) {
-      this.stop();
-    }
-  }
-start(type) {
-    this.stop();
-    if (this.isMuted) return;
-
-    // Check if a custom sound is selected for this alert type
-    const settings = loadSettings();
-    const soundId = type === "fire" ? settings.fireSoundId : settings.gasSoundId;
-    const sound = findSoundById(soundId);
-    if (sound && sound.type === "custom" && sound.data) {
-      // Play the custom audio file (looping)
-      try {
-        const audioEl = new Audio(sound.data);
-        audioEl.loop = true;
-        audioEl.volume = 1.0;
-        audioEl.play().catch(err => {
-          console.warn("Custom alarm sound autoplay blocked:", err);
-        });
-        this.audioEl = audioEl;
-        return;
-      } catch (e) {
-        console.error("Failed to play custom alarm sound:", e);
-      }
-    }
-
-    this.initCtx();
-    let toggle = false;
-    this.intervalId = setInterval(() => {
-      if (this.isMuted) {
-        this.stop();
-        return;
-      }
-      if (!this.ctx || this.ctx.state === "suspended") return;
-      try {
-        const now = this.ctx.currentTime;
-        if (type === "fire") {
-          // Fire alarm: Piercing dual-frequency physical horn simulation (2800Hz and 2830Hz)
-          // Creates a beating frequency that sounds identical to real smoke detector horns.
-          const osc1 = this.ctx.createOscillator();
-          const osc2 = this.ctx.createOscillator();
-          const gainNode = this.ctx.createGain();
-          osc1.type = "sawtooth";
-          osc1.frequency.setValueAtTime(toggle ? 2800 : 2900, now);
-          osc2.type = "square";
-          osc2.frequency.setValueAtTime(toggle ? 2830 : 2930, now);
-
-          // Combine both for a realistic, loud resonance
-          gainNode.gain.setValueAtTime(0.15, now);
-          gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-          osc1.connect(gainNode);
-          osc2.connect(gainNode);
-          gainNode.connect(this.ctx.destination);
-          osc1.start(now);
-          osc1.stop(now + 0.23);
-          osc2.start(now);
-          osc2.stop(now + 0.23);
-          toggle = !toggle;
-        } else if (type === "gas") {
-          // Gas alarm: Repetitive rapid warning square wave beep (1500Hz)
-          const osc = this.ctx.createOscillator();
-          const gainNode = this.ctx.createGain();
-          osc.type = "square";
-          osc.frequency.setValueAtTime(1500, now); // Urgent mid-high frequency warning
-
-          gainNode.gain.setValueAtTime(0.14, now);
-          gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.12); // Shorter, sharper beeps
-
-          osc.connect(gainNode);
-          gainNode.connect(this.ctx.destination);
-          osc.start(now);
-          osc.stop(now + 0.14);
-        }
-      } catch (err) {
-        console.error("Synthesizer sound error:", err);
-      }
-    }, 250);
-  }
-stop() {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
-    }
-    if (this.audioEl) {
-      try {
-        this.audioEl.pause();
-        this.audioEl.src = "";
-        this.audioEl = null;
-      } catch (e) {
-        console.warn("Failed to stop custom alarm sound:", e);
-      }
-    }
-  }
-}
 export const Dashboard = () => {
   // Socket.io and State
   const [socket, setSocket] = useState(null);
@@ -237,70 +85,20 @@ export const Dashboard = () => {
   const [togglingAppliance, setTogglingAppliance] = useState({});
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Sound Alarm States
-  const [isMuted, setIsMuted] = useState(false);
-  const [testAlarmType, setTestAlarmType] = useState(null);
+// Sound Alarm States (synced with global alarm engine)
+  const [isMuted, setIsMuted] = useState(() => (typeof window.__alarmGetMuted === "function" ? window.__alarmGetMuted() : loadMuteState()));
+  const [testAlarmType, setTestAlarmType] = useState(() => (typeof window.__alarmGetTestActive === "function" ? window.__alarmGetTestActive() : null));
   const [showSimulator, setShowSimulator] = useState(false);
-  const [audioLocked, setAudioLocked] = useState(true);
+  const [audioLocked, setAudioLocked] = useState(false);
 
-  // Ref to hold stable AlarmSoundEngine instance across renders
-  const alarmEngineRef = React.useRef(null);
-  if (!alarmEngineRef.current) {
-    alarmEngineRef.current = new AlarmSoundEngine();
-  }
-
-  // Effect to automatically start or stop alarm sounds
+  // Sync muted state with the global engine and listen for mute changes
   useEffect(() => {
-    const engine = alarmEngineRef.current;
-    if (!engine) return;
-    engine.setMute(isMuted);
-    if (!isMuted) {
-      if (testAlarmType) {
-        engine.start(testAlarmType);
-      } else if (sensors.fireStatus) {
-        engine.start("fire");
-      } else if (sensors.gasStatus) {
-        engine.start("gas");
-      } else {
-        engine.stop();
-      }
-    } else {
-      engine.stop();
-    }
-    setAudioLocked(engine.isLocked());
-    return () => {
-      engine.stop();
+    const onMuteChange = e => {
+      setIsMuted(e.detail.muted);
     };
-  }, [sensors.fireStatus, sensors.gasStatus, isMuted, testAlarmType]);
-
-  // Unlock audio state on any user interaction with the document (standard browser policy)
-  useEffect(() => {
-    const resumeAudio = () => {
-      if (alarmEngineRef.current) {
-        alarmEngineRef.current.unlock();
-        setAudioLocked(alarmEngineRef.current.isLocked());
-      }
-    };
-    // Use capture phase to bypass child elements doing e.stopPropagation()
-    window.addEventListener("click", resumeAudio, {
-      capture: true
-    });
-    window.addEventListener("touchstart", resumeAudio, {
-      capture: true
-    });
-    window.addEventListener("touchend", resumeAudio, {
-      capture: true
-    });
+    window.addEventListener("alarm:mute-change", onMuteChange);
     return () => {
-      window.removeEventListener("click", resumeAudio, {
-        capture: true
-      });
-      window.removeEventListener("touchstart", resumeAudio, {
-        capture: true
-      });
-      window.removeEventListener("touchend", resumeAudio, {
-        capture: true
-      });
+      window.removeEventListener("alarm:mute-change", onMuteChange);
     };
   }, []);
 
@@ -674,12 +472,10 @@ export const Dashboard = () => {
           </p>
         </div>
       </div>
-      <button onClick={e => {
+<button onClick={e => {
         e.stopPropagation();
-        if (alarmEngineRef.current) {
-          alarmEngineRef.current.unlock();
-          setAudioLocked(alarmEngineRef.current.isLocked());
-        }
+        // Unlock audio via the global engine (dispatch a click gesture)
+        window.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       }} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] uppercase tracking-wider px-4 py-2 rounded-lg shrink-0 transition-all cursor-pointer shadow-lg shadow-blue-500/25">
         Enable Audio
       </button>
@@ -963,12 +759,13 @@ export const Dashboard = () => {
               <h2 className="text-sm font-bold uppercase tracking-wider text-white">Alarm &amp; Safety Control</h2>
               <p className="text-xs text-slate-400 mt-1">Test safety relays &amp; sounds</p>
             </div>
-            <button onClick={() => {
-              const nextMuted = !isMuted;
-              setIsMuted(nextMuted);
-              if (!nextMuted && alarmEngineRef.current) {
-                alarmEngineRef.current.unlock();
-                setAudioLocked(alarmEngineRef.current.isLocked());
+<button onClick={() => {
+              // Use the global mute toggle so it stays in sync across all pages
+              if (typeof window.__alarmToggleMute === "function") {
+                window.__alarmToggleMute();
+              } else {
+                const nextMuted = !isMuted;
+                setIsMuted(nextMuted);
               }
             }} className={`p-2 rounded-xl border transition-all cursor-pointer ${isMuted ? "bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20" : "bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20"}`} title={isMuted ? "Unmute Alarm Sound" : "Mute Alarm Sound"}>
               {isMuted ? <VolumeX className="h-4.5 w-4.5" /> : <Volume2 className="h-4.5 w-4.5" />}
@@ -1119,14 +916,13 @@ export const Dashboard = () => {
               <div className="space-y-2 pt-3 border-t border-white/5 mt-3">
                 <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">2. Audible Siren Tester</h3>
                 <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => {
+<button onClick={() => {
                     if (testAlarmType === "fire") {
                       setTestAlarmType(null);
+                      if (typeof window.__alarmStopTest === "function") window.__alarmStopTest();
                     } else {
                       setTestAlarmType("fire");
-                      if (alarmEngineRef.current) {
-                        alarmEngineRef.current.unlock();
-                      }
+                      if (typeof window.__alarmTest === "function") window.__alarmTest("fire");
                     }
                   }} className={`p-2.5 rounded-xl border text-[11px] font-bold transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${testAlarmType === "fire" ? "bg-rose-500/20 border-rose-500 text-rose-400 animate-pulse" : "bg-[#0A0B0D]/40 border-white/5 hover:bg-white/5 text-slate-300"}`}>
                     <span className="text-sm">🔥</span>
@@ -1135,11 +931,10 @@ export const Dashboard = () => {
                   <button onClick={() => {
                     if (testAlarmType === "gas") {
                       setTestAlarmType(null);
+                      if (typeof window.__alarmStopTest === "function") window.__alarmStopTest();
                     } else {
                       setTestAlarmType("gas");
-                      if (alarmEngineRef.current) {
-                        alarmEngineRef.current.unlock();
-                      }
+                      if (typeof window.__alarmTest === "function") window.__alarmTest("gas");
                     }
                   }} className={`p-2.5 rounded-xl border text-[11px] font-bold transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${testAlarmType === "gas" ? "bg-amber-500/20 border-amber-500 text-amber-400 animate-pulse" : "bg-[#0A0B0D]/40 border-white/5 hover:bg-white/5 text-slate-300"}`}>
                     <span className="text-sm">⚠️</span>

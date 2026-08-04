@@ -10,6 +10,7 @@ import { Schedules } from "./pages/Schedules.jsx";
 import { AboutUs } from "./pages/AboutUs.jsx";
 import { NotFound } from "./pages/NotFound.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
+import { GlobalAlarm } from "./components/GlobalAlarm.jsx";
 import { Lock, LogOut, ShieldAlert, Cpu, Menu } from "lucide-react";
 import io from "socket.io-client";
 
@@ -158,7 +159,10 @@ const AppLayout = () => {
         </div>
       </div>;
   }
-  return <div className="flex min-h-screen bg-[#0A0B0D] text-slate-200 font-sans relative">
+return <div className="flex min-h-screen bg-[#0A0B0D] text-slate-200 font-sans relative">
+      {/* Global Alarm - plays selected sounds on any page */}
+      <GlobalAlarm />
+
       {/* Persistent Left Navigation Sidebar */}
       <Sidebar socketConnected={socketConnected} espOnline={espOnline} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
