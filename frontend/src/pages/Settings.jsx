@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
-import { User, Cpu, Network, AlertTriangle, Settings as SettingsIcon, Code, Droplet, Waves, FileCode, Compass, Flame } from "lucide-react";
+import { User, Cpu, Network, AlertTriangle, Settings as SettingsIcon, Code, Droplet, Waves, FileCode, Compass, Flame, Music, Play, Trash2, Check, Upload, Volume2 } from "lucide-react";
+import { getAllSounds, addCustomSound, removeCustomSound, setFireSound, setGasSound, loadSettings } from "../utils/alarmSounds.js";
 export const Settings = () => {
   const {
     user
@@ -17,9 +18,91 @@ export const Settings = () => {
   // Calibration State for Ultrasonic simulation
   const [tankHeight, setTankHeight] = useState(100); // in cm
   const [airDistance, setAirDistance] = useState(35); // in cm
-  const [savingCalibration, setSavingCalibration] = useState(false);
+const [savingCalibration, setSavingCalibration] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState(null);
+
+  // Alert Sound Selection State
+  const [sounds, setSounds] = useState(getAllSounds());
+  const [soundSettings, setSoundSettings] = useState(loadSettings());
+  const [playingSoundId, setPlayingSoundId] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [previewAudio, setPreviewAudio] = useState(null);
+  const refreshSounds = () => {
+    setSounds(getAllSounds());
+    setSoundSettings(loadSettings());
+  };
+const handlePlayPreview = sound => {
+    // Stop current preview
+    if (previewAudio) {
+      previewAudio.pause();
+      setPreviewAudio(null);
+    }
+    if (playingSoundId === sound.id) {
+      setPlayingSoundId(null);
+      return;
+    }
+    if (sound.type === "custom" && sound.data) {
+      const audio = new Audio(sound.data);
+      audio.onended = () => setPlayingSoundId(null);
+      audio.play().catch(err => {
+        console.warn("Preview play blocked:", err);
+        setPlayingSoundId(null);
+      });
+      setPreviewAudio(audio);
+      setPlayingSoundId(sound.id);
+    } else {
+      // Built-in synthesized sounds: play a short preview via Web Audio
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        const ctx = new AudioContextClass();
+        const now = ctx.currentTime;
+        let osc;
+        if (sound.kind === "fire") {
+          osc = ctx.createOscillator();
+          osc.type = "sawtooth";
+          osc.frequency.setValueAtTime(2900, now);
+        } else {
+          osc = ctx.createOscillator();
+          osc.type = "square";
+          osc.frequency.setValueAtTime(1500, now);
+        }
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.8);
+        setPlayingSoundId(sound.id);
+        setTimeout(() => {
+          osc.stop();
+          ctx.close();
+          setPlayingSoundId(null);
+        }, 900);
+      }
+    }
+  };
+  const handleAddSound = async e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      await addCustomSound(file);
+      refreshSounds();
+    } catch (err) {
+      setUploadError(err.message || "Failed to add sound.");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+  const handleRemoveSound = id => {
+    removeCustomSound(id);
+    refreshSounds();
+  };
   useEffect(() => {
     const fetchAvailability = async () => {
       try {
@@ -53,8 +136,16 @@ export const Settings = () => {
         console.error("Failed to load water tank height in settings:", err);
       }
     };
-    fetchAvailability();
+fetchAvailability();
     fetchWaterTank();
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (previewAudio) {
+        previewAudio.pause();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const handleToggleAvailability = async key => {
     const nextVal = !sensors[key];
@@ -364,7 +455,82 @@ Reads the analog AO pin (GPIO 35, ADC1_CH7). Uses a mean + peak-to-peak flicker 
                 </div>
               </div>
 
-            </div>}
+</div>}
+        </div>
+
+        {/* Alert Sounds Configuration Card */}
+        <div className="md:col-span-3 bg-[#16181D] border border-white/5 rounded-2xl p-6 text-slate-200">
+          <div className="flex items-center space-x-2.5 mb-5 border-b border-white/5 pb-4">
+            <Music className="h-5 w-5 text-indigo-500 animate-pulse" />
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-wider text-white">Alert Sounds</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Choose or upload custom alarm sounds for fire and gas alerts</p>
+            </div>
+          </div>
+
+          {/* Horizontal list of sounds */}
+          <div className="flex flex-wrap gap-3 items-stretch">
+            {sounds.map(sound => {
+              const isFire = soundSettings.fireSoundId === sound.id;
+              const isGas = soundSettings.gasSoundId === sound.id;
+              const isPlaying = playingSoundId === sound.id;
+              return <div key={sound.id} className={`flex flex-col gap-2 p-3.5 rounded-xl border bg-[#0A0B0D]/50 min-w-[180px] flex-1 max-w-[240px] transition-all ${isFire || isGas ? "border-indigo-500/40 bg-indigo-500/5" : "border-white/5"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center space-x-2 min-w-0">
+                    <div className={`p-1.5 rounded-lg shrink-0 ${sound.type === "custom" ? "bg-emerald-500/10 text-emerald-400" : "bg-indigo-500/10 text-indigo-400"}`}>
+                      <Volume2 className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{sound.name}</p>
+                      <p className="text-[9px] uppercase tracking-wider text-slate-500">
+                        {sound.type === "custom" ? "Custom Sound" : "Built-in"}
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => handlePlayPreview(sound)} className={`p-1.5 rounded-lg transition-all cursor-pointer shrink-0 ${isPlaying ? "bg-rose-500/20 text-rose-400" : "bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white"}`} title="Preview">
+                    {isPlaying ? <Square className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-white/5">
+                  <button onClick={() => {
+                    setFireSound(sound.id);
+                    refreshSounds();
+                  }} className={`flex-1 text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg transition-all cursor-pointer ${isFire ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-transparent"}`}>
+                    {isFire ? "✓ Fire" : "Fire"}
+                  </button>
+                  <button onClick={() => {
+                    setGasSound(sound.id);
+                    refreshSounds();
+                  }} className={`flex-1 text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg transition-all cursor-pointer ${isGas ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-transparent"}`}>
+                    {isGas ? "✓ Gas" : "Gas"}
+                  </button>
+                  {sound.type === "custom" && <button onClick={() => handleRemoveSound(sound.id)} className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer shrink-0" title="Delete">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>}
+                </div>
+              </div>;
+            })}
+
+            {/* Add Sound upload card */}
+            <label className={`flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl border border-dashed border-white/10 bg-[#0A0B0D]/30 min-w-[180px] flex-1 max-w-[240px] cursor-pointer hover:border-indigo-500/40 hover:bg-indigo-500/5 transition-all ${uploading ? "opacity-60 pointer-events-none" : ""}`}>
+              <Upload className="h-5 w-5 text-indigo-400" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                {uploading ? "Uploading..." : "Add Sound"}
+              </span>
+              <span className="text-[9px] text-slate-600 text-center">mp3 / wav / ogg</span>
+              <input type="file" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/ogg,audio/mp4" onChange={handleAddSound} className="hidden" />
+            </label>
+          </div>
+
+          {uploadError && <div className="mt-3 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs text-rose-400 flex items-start space-x-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span className="leading-normal">{uploadError}</span>
+          </div>}
+
+          <div className="mt-4 p-3.5 bg-[#0A0B0D]/60 border border-white/5 rounded-xl text-[11px] text-slate-400 leading-relaxed">
+            <span className="font-semibold text-slate-300">How it works:</span> Select a sound to assign it as the <span className="text-rose-400 font-semibold">Fire</span> or <span className="text-amber-400 font-semibold">Gas</span> alert. Upload your own audio files to add them to the list. The selected sounds play automatically on the dashboard when an alert is detected.
+          </div>
         </div>
 
         {/* Pinout configuration table */}

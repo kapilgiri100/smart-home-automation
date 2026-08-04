@@ -1,8 +1,8 @@
-# Task: Move About Us to Login Page next to User Manual
+# Task: Alert Sound Selection System
 
 ## Steps
-- [x] 1. Analyze task and read relevant files (Login.jsx, Sidebar.jsx, AboutUs.jsx, App.jsx)
-- [x] 2. Add "About Us" state and button next to "View User Manual" in Login.jsx
-- [x] 3. Add About Us content section to Login.jsx
-- [x] 4. Remove "About Us" from Sidebar.jsx nav
-- [x] 5. Verify changes
+- [x] 1. Analyze task and read relevant files (Settings.jsx, Dashboard.jsx)
+- [x] 2. Create shared sound manager module (alarmSounds.js)
+- [x] 3. Add "Alert Sounds" section to Settings.jsx
+- [x] 4. Modify Dashboard.jsx alarm engine to use selected sounds
+- [x] 5. Verify build (vite build)

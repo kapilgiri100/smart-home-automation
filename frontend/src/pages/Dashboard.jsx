@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import io from "socket.io-client";
 import { Flame, Droplet, Lightbulb, Tv, Zap, Activity, ShieldAlert, RefreshCw, Wifi, WifiOff, Cpu, AlertTriangle, Play, Square, Volume2, VolumeX, ListRestart, Pencil, Check, X, BellRing, Radio, SlidersHorizontal, ChevronUp } from "lucide-react";
+import { findSoundById, loadSettings } from "../utils/alarmSounds.js";
 
 // Types
 
@@ -26,6 +27,7 @@ class AlarmSoundEngine {
   ctx = null;
   intervalId = null;
   isMuted = false;
+  audioEl = null;
   constructor() { }
   initCtx() {
     if (!this.ctx) {
@@ -80,9 +82,30 @@ class AlarmSoundEngine {
       this.stop();
     }
   }
-  start(type) {
+start(type) {
     this.stop();
     if (this.isMuted) return;
+
+    // Check if a custom sound is selected for this alert type
+    const settings = loadSettings();
+    const soundId = type === "fire" ? settings.fireSoundId : settings.gasSoundId;
+    const sound = findSoundById(soundId);
+    if (sound && sound.type === "custom" && sound.data) {
+      // Play the custom audio file (looping)
+      try {
+        const audioEl = new Audio(sound.data);
+        audioEl.loop = true;
+        audioEl.volume = 1.0;
+        audioEl.play().catch(err => {
+          console.warn("Custom alarm sound autoplay blocked:", err);
+        });
+        this.audioEl = audioEl;
+        return;
+      } catch (e) {
+        console.error("Failed to play custom alarm sound:", e);
+      }
+    }
+
     this.initCtx();
     let toggle = false;
     this.intervalId = setInterval(() => {
@@ -135,10 +158,19 @@ class AlarmSoundEngine {
       }
     }, 250);
   }
-  stop() {
+stop() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
+    }
+    if (this.audioEl) {
+      try {
+        this.audioEl.pause();
+        this.audioEl.src = "";
+        this.audioEl = null;
+      } catch (e) {
+        console.warn("Failed to stop custom alarm sound:", e);
+      }
     }
   }
 }
