@@ -535,11 +535,26 @@ app.put("/api/schedules/:id", async (req, res) => {
       timezone
     } = req.body;
     const updateFields = {};
-    if (typeof isActive === "boolean") updateFields.isActive = isActive;
-    if (typeof time === "string") updateFields.time = time;
-    if (typeof action === "string") updateFields.action = action;
+    if (typeof isActive === "boolean") {
+      updateFields.isActive = isActive;
+      // Reset lastExecuted when re-enabling schedule so it runs at the next matching time
+      if (isActive === true) {
+        updateFields.lastExecuted = null;
+      }
+    }
+    if (typeof time === "string") {
+      updateFields.time = time;
+      // Reset lastExecuted when changing the scheduled time
+      updateFields.lastExecuted = null;
+    }
+    if (typeof action === "string") {
+      updateFields.action = action;
+      // Reset lastExecuted when changing the action (ON/OFF)
+      updateFields.lastExecuted = null;
+    }
     if (typeof applianceId === "string") updateFields.applianceId = applianceId;
     if (typeof timezone === "string") updateFields.timezone = timezone;
+    
     await db.update(schedules).set(updateFields).where(eq(schedules.id, id));
     const updated = await db.select().from(schedules).where(eq(schedules.id, id)).limit(1);
 
@@ -1162,8 +1177,9 @@ async function checkSchedules() {
   try {
     const now = new Date();
     const activeSchedules = await runWithRetry(() => db.select().from(schedules).where(eq(schedules.isActive, true)));
-for (const sched of activeSchedules) {
-      // Format current UTC time into schedule's specific timezone
+
+    for (const sched of activeSchedules) {
+      // Format current time into schedule's specific timezone
       const parts = new Intl.DateTimeFormat("en-US", {
         timeZone: sched.timezone || "UTC",
         hour: "2-digit",
@@ -1174,22 +1190,51 @@ for (const sched of activeSchedules) {
       const minute = parts.find(p => p.type === "minute")?.value || "00";
       const timeStr = `${hour}:${minute}`;
 
-      // If matches, trigger action
+      // Check if it's time to execute this schedule
       if (timeStr === sched.time) {
-        const targetStatus = sched.action === "ON";
-        const appRecord = await runWithRetry(() => db.select().from(appliances).where(eq(appliances.id, sched.applianceId)).limit(1));
-        if (appRecord[0] && appRecord[0].status !== targetStatus) {
-          // Tank-Full Safety Guard: a scheduled ON for the fill pump (tv) is blocked when the tank is full
+        // Check if this schedule has already been executed in this minute
+        // If lastExecuted is within the last 60 seconds, skip (already ran)
+        const lastExec = sched.lastExecuted ? new Date(sched.lastExecuted) : null;
+        const timeSinceLastExec = lastExec ? now - lastExec : Infinity;
+        
+        if (timeSinceLastExec < 60000) {
+          // Already executed within the last minute, skip
+          continue;
+        }
+
+        // Get appliance record
+        const appRecord = await runWithRetry(() => 
+          db.select().from(appliances).where(eq(appliances.id, sched.applianceId)).limit(1)
+        );
+        
+        if (appRecord[0]) {
+          const targetStatus = sched.action === "ON";
+          
+          // Tank-Full Safety Guard: block scheduled ON for fill pump when tank is full
           if (sched.applianceId === "tv" && targetStatus && await isFillPumpTurnOnBlocked(true)) {
             await addActivityLog(`[SAFETY] Scheduled ON for Overhead Fill Pump blocked — Tank is FULL (${FILL_PUMP_SHUTOFF_LEVEL}%+).`);
             continue;
           }
-          await runWithRetry(() => db.update(appliances).set({
-            status: targetStatus,
-            updatedAt: new Date()
-          }).where(eq(appliances.id, sched.applianceId)));
+
+          // ALWAYS execute the scheduled action (regardless of current status)
+          // This ensures the device reaches the desired state
+          await runWithRetry(() => 
+            db.update(appliances).set({
+              status: targetStatus,
+              updatedAt: new Date()
+            }).where(eq(appliances.id, sched.applianceId))
+          );
+
+          // Update the lastExecuted timestamp to prevent re-execution
+          await runWithRetry(() =>
+            db.update(schedules).set({
+              lastExecuted: new Date()
+            }).where(eq(schedules.id, sched.id))
+          );
+
           const name = appRecord[0].name || sched.applianceId;
-          await addActivityLog(`[SCHEDULED]: ${name} turned ${targetStatus ? "ON" : "OFF"}`);
+          const actionText = targetStatus ? "ON" : "OFF";
+          await addActivityLog(`[SCHEDULED] ${name} turned ${actionText} at ${timeStr} (${sched.timezone})`);
 
           // Broadcast to all Socket.IO clients
           io.emit("appliance-updated", {
@@ -1198,6 +1243,11 @@ for (const sched of activeSchedules) {
           });
         }
       }
+    }
+  } catch (error) {
+    console.error("Error evaluating background schedules:", error);
+  }
+}
     }
   } catch (error) {
     console.error("Error evaluating background schedules:", error);

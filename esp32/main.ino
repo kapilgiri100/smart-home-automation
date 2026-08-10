@@ -147,13 +147,13 @@ const unsigned long UPDATE_INTERVAL = 1500; // Send update every 1.5 seconds
 // and also rejects saturating sunlight by its extreme mean level.
 // Real flame is confirmed only when mean is in-band AND the signal
 // FLICKERS (peak-to-peak or relative flicker ratio).
-const int FLAME_IR_MEAN_MIN = 40;          // ADC avg below this = disconnected / pinned low (no signal)
+const int FLAME_IR_MEAN_MIN = 30;          // ADC avg below this = disconnected / pinned low (no signal)
 const int FLAME_IR_MEAN_MAX = 4090;        // ADC avg above this = pinned at rail; flicker is still the discriminator
-const int FLAME_FLICKER_PP_THRESHOLD = 25; // Absolute peak-to-peak ADC variation -> flicker (real flame)
-const int FLAME_FLICKER_RATIO_X1000 = 25;  // Relative flicker: PP*1000/mean >= this (catches small-swing flames)
-const int FLAME_WINDOW_SIZE = 30;          // Samples per evaluation window (~0.9s at 30ms) - responsive
-const unsigned long FLAME_SAMPLE_INTERVAL_MS = 30;
-const int FLAME_CLEAR_WINDOWS = 1;                  // Clear fire after 1 no-flame window (~0.9s): buzzer OFF promptly when no fire
+const int FLAME_FLICKER_PP_THRESHOLD = 15; // Absolute peak-to-peak ADC variation -> flicker (REDUCED for better sensitivity)
+const int FLAME_FLICKER_RATIO_X1000 = 15;  // Relative flicker: PP*1000/mean >= this (REDUCED for better sensitivity)
+const int FLAME_WINDOW_SIZE = 20;          // Samples per evaluation window (~0.6s at 30ms) - FASTER response
+const unsigned long FLAME_SAMPLE_INTERVAL_MS = 30; // 30ms between samples = 33 Hz sampling rate
+const int FLAME_CLEAR_WINDOWS = 2;                  // Clear fire after 2 no-flame windows (~1.2s): prevents jitter
 const unsigned long FLAME_DEBUG_INTERVAL_MS = 5000; // Periodic Serial debug for field tuning
 
 // Flame filter runtime state
@@ -163,6 +163,7 @@ int flameSampleIndex = 0;
 int flameClearWindowCount = 0; // Consecutive no-flame windows (to unlatch fire)
 unsigned long lastFlameDebugTime = 0;
 bool fireDetected = false; // Latched flicker-confirmed fire (default: no fire)
+bool lastFireDetected = false; // Track previous state to detect transitions (for immediate updates)
 
 // Last known physical states to detect local changes
 bool lastSwitchLightState = HIGH;
@@ -187,6 +188,9 @@ bool tvState = false;
 bool socketState = false;
 bool bulb3State = false;
 bool bulb4State = false;
+
+// Track previous gas state for immediate response on changes
+bool lastGasLeakage = false;
 
 // Server-side safety overrides to ring physical buzzer if triggered via web
 bool serverFireStatus = false;
@@ -371,6 +375,18 @@ void handleNotFound()
   handleRoot();
 }
 
+// Re-enter AP Captive Portal configuration mode (reusable from multiple triggers)
+// Disconnects the STA connection but keeps the saved WiFi profile so it can
+// auto-reconnect later. Stops the portal servers if they were already running.
+void enterConfigMode()
+{
+  Serial.println("\n--- Entering AP Configuration Mode ---");
+  inConfigMode = true;
+  WiFi.disconnect(false); // Disconnect STA but keep saved profiles
+  delay(100);
+  startCaptivePortal();
+}
+
 // Start Soft Access Point
 void startCaptivePortal()
 {
@@ -497,6 +513,16 @@ void setup()
     digitalWrite(PIN_LED, LOW);
     delay(200);
     digitalWrite(PIN_LED, HIGH);
+    
+    // Show flame detection system is ready
+    Serial.println();
+    Serial.println("╔═══════════════════════════════════════════╗");
+    Serial.println("║  🔥 FLAME DETECTION SYSTEM READY 🔥      ║");
+    Serial.println("╚═══════════════════════════════════════════╝");
+    Serial.println("  → Monitoring flame sensor (GPIO 35)");
+    Serial.println("  → Immediate alert response enabled");
+    Serial.println("  → Fire Pump automation active");
+    Serial.println();
   }
 }
 
@@ -593,12 +619,18 @@ void sampleFlameFlicker()
       if (!fireDetected)
       {
         fireDetected = true;
-        Serial.print("[FLAME FILTER] FIRE CONFIRMED! mean=");
+        Serial.println();
+        Serial.println("╔══════════════════════════════════════╗");
+        Serial.println("║  🔥 FIRE DETECTED - ALARM ON! 🔥    ║");
+        Serial.println("╚══════════════════════════════════════╝");
+        Serial.print("  Mean IR: ");
         Serial.print(mean);
-        Serial.print(", PP=");
+        Serial.print(" | PP: ");
         Serial.print(peakToPeak);
-        Serial.print(", ratio=");
+        Serial.print(" | Ratio: ");
         Serial.print(flickerRatio);
+        Serial.println("/1000");
+        Serial.println("  → Buzzer ACTIVATED | Fire Pump ON | Backend Alert SENT");
         Serial.println();
       }
     }
@@ -608,17 +640,24 @@ void sampleFlameFlicker()
       // To avoid a ring-break-ring stutter from a momentary flicker
       // lull or a brief saturation, we do NOT unlatch immediately.
       // We only unlatch after FLAME_CLEAR_WINDOWS consecutive
-      // no-flame windows (~0.9s), so the buzzer turns OFF promptly
+      // no-flame windows, so the buzzer turns OFF promptly
       // once the fire is gone.
       flameClearWindowCount++;
       if (fireDetected && flameClearWindowCount >= FLAME_CLEAR_WINDOWS)
       {
         fireDetected = false;
         flameClearWindowCount = 0;
-        Serial.print("[FLAME FILTER] Fire cleared after sustained absence (mean=");
+        Serial.println();
+        Serial.println("╔══════════════════════════════════════╗");
+        Serial.println("║  ✓ FIRE CLEARED - ALARM OFF ✓       ║");
+        Serial.println("╚══════════════════════════════════════╝");
+        Serial.print("  Mean IR: ");
         Serial.print(mean);
-        Serial.print(", PP=");
-        Serial.println(peakToPeak);
+        Serial.print(" | PP: ");
+        Serial.print(peakToPeak);
+        Serial.println();
+        Serial.println("  → Buzzer OFF | Fire Pump OFF | Backend Notified");
+        Serial.println();
       }
     }
   }
@@ -643,16 +682,17 @@ void sampleFlameFlicker()
     }
     latestMean = s / FLAME_WINDOW_SIZE;
     latestPP = mx - mn;
-    Serial.print("[FLAME DEBUG] raw_mean=");
+    int ratio = latestMean > 0 ? (latestPP * 1000 / latestMean) : 0;
+    
+    // Enhanced debug output with threshold information
+    Serial.print("[FLAME DEBUG] Mean=");
     Serial.print(latestMean);
-    Serial.print(" pp=");
+    Serial.print(" | PP=");
     Serial.print(latestPP);
-    Serial.print(" ratio=");
-    Serial.print(latestMean > 0 ? (latestPP * 1000 / latestMean) : 0);
-    Serial.print(" clear_count=");
-    Serial.print(fireDetected ? flameClearWindowCount : 0);
-    Serial.print(" fire=");
-    Serial.println(fireDetected ? "YES" : "no");
+    Serial.print(" | Ratio=");
+    Serial.print(ratio);
+    Serial.print(" | Status=");
+    Serial.println(fireDetected ? "🔥 FIRE" : "✓ OK");
   }
 }
 
@@ -678,7 +718,7 @@ void loop()
     {
       lastBackgroundReconnect = millis();
       Serial.println("\n[AUTO-HEAL] Checking background router connection...");
-      if (WiFi.status() == WL_CONNECTED)
+if (WiFi.status() == WL_CONNECTED)
       {
         Serial.println("[AUTO-HEAL] Reconnected to router successfully in background! Resuming normal mode.");
         WiFi.softAPdisconnect(true); // Shut down AP
@@ -715,11 +755,8 @@ void loop()
     // If disconnected for more than 15 seconds, automatically fall back to AP captive portal configuration mode
     if (millis() - lastWifiConnectedTime > 15000)
     {
-      Serial.println("\n[WIFI LOST] WiFi connection lost for >15 seconds. Re-entering AP Captive Portal configuration mode...");
-      inConfigMode = true;
-      WiFi.disconnect(false); // Disconnect STA but keep configuration profiles
-      delay(100);
-      startCaptivePortal();
+      Serial.println("[WIFI LOST] WiFi connection lost for >15 seconds. Re-entering AP Captive Portal configuration mode...");
+      enterConfigMode();
       return;
     }
   }
@@ -733,6 +770,36 @@ void loop()
 
   bool stateChanged = false;
   unsigned long now = millis();
+
+  // --- IMPORTANT: Re-enter WiFi Setup Mode by pressing ALL FOUR switches together ---
+  // If all four switches are held LOW simultaneously for a short debounce period,
+  // the ESP32 disconnects from the current WiFi and enters the AP Captive Portal so
+  // you can select a different WiFi network WITHOUT restarting the router or losing
+  // connection first. This prevents accidental single-switch triggers.
+  {
+    static unsigned long allSwitchesPressedTime = 0;
+    bool allPressed = (switchLight == LOW && switchFan == LOW && switchBulb3 == LOW && switchBulb4 == LOW);
+
+    if (allPressed)
+    {
+      if (allSwitchesPressedTime == 0)
+      {
+        allSwitchesPressedTime = now; // Start the hold timer
+      }
+      else if (now - allSwitchesPressedTime >= 2000)
+      {
+        // All four switches held for 2 seconds -> enter configuration mode
+        Serial.println("\n[4-SWITCH TRIGGER] All four switches pressed 2s. Entering WiFi Setup...");
+        allSwitchesPressedTime = 0;
+        enterConfigMode();
+        return;
+      }
+    }
+    else
+    {
+      allSwitchesPressedTime = 0; // Reset timer if any switch is released
+    }
+  }
 
   // --- Light Switch (Debounced) ---
   if (switchLight == LOW)
@@ -939,7 +1006,25 @@ void loop()
   }
 
   // 5. Send parameters to server if time interval elapsed OR state changed
-  if (millis() - lastUpdateTime > UPDATE_INTERVAL || stateChanged)
+  // IMPORTANT: Also send immediately if FIRE or GAS state changed (instant alert)
+  // This ensures alarm responses happen within milliseconds, not waiting for 1.5s interval
+  bool fireStateChanged = (fireDetected != lastFireDetected);
+  bool gasStateChanged = (gasLeakage != lastGasLeakage);
+  bool shouldSendUpdate = (millis() - lastUpdateTime > UPDATE_INTERVAL) || stateChanged || fireStateChanged || gasStateChanged;
+  
+  // Log state changes for troubleshooting
+  if (fireStateChanged)
+  {
+    Serial.print("[ALERT] Fire State Changed: ");
+    Serial.println(fireDetected ? "🔥 ACTIVATED → Sending IMMEDIATE backend alert" : "✓ CLEARED → Sending IMMEDIATE backend clear");
+  }
+  if (gasStateChanged)
+  {
+    Serial.print("[ALERT] Gas State Changed: ");
+    Serial.println(gasLeakage ? "⚠️  DETECTED → Sending IMMEDIATE backend alert" : "✓ CLEARED → Sending IMMEDIATE backend clear");
+  }
+  
+  if (shouldSendUpdate)
   {
     lastUpdateTime = millis();
 
@@ -982,13 +1067,33 @@ void loop()
                          "\"socket\":" + String(socketState ? "true" : "false") +
                          "}}";
 
+        // Show what we're sending (especially important for alerts)
+        if (fireStateChanged || gasStateChanged)
+        {
+          Serial.println("[HTTP] Sending URGENT alarm update to backend:");
+          Serial.print("       Fire=");
+          Serial.print(fireDetected ? "🔥ON" : "✓OFF");
+          Serial.print(" | Gas=");
+          Serial.println(gasLeakage ? "⚠️ ON" : "✓OFF");
+        }
+
         int httpResponseCode = http.POST(payload);
 
         if (httpResponseCode > 0)
         {
           String response = http.getString();
-          Serial.println("HTTP Response code: " + String(httpResponseCode));
-          Serial.println("Response: " + response);
+          if (fireStateChanged || gasStateChanged)
+          {
+            Serial.print("[HTTP] Response code: ");
+            Serial.print(httpResponseCode);
+            Serial.println(" → Alert received by backend ✓");
+          }
+          else
+          {
+            Serial.print("[HTTP] Regular update sent (code ");
+            Serial.print(httpResponseCode);
+            Serial.println(")");
+          }
 
           // Parse state updates from response (using simple, robust flat states key checks)
           if (response.indexOf("\"light\":true") != -1)
@@ -1152,14 +1257,28 @@ void loop()
         }
         else
         {
-          Serial.print("Error code in POST request: ");
-          Serial.println(httpResponseCode);
+          if (fireStateChanged || gasStateChanged)
+          {
+            Serial.print("[ERROR] POST failed with code ");
+            Serial.print(httpResponseCode);
+            Serial.println(" - ALERT NOT DELIVERED TO BACKEND!");
+          }
+          else
+          {
+            Serial.print("HTTP Error code: ");
+            Serial.println(httpResponseCode);
+          }
         }
         http.end();
 
         // Reset the physical-toggle flag after one successful update attempt
         // to avoid repeated POSTs caused by the same button press.
         stateChanged = false;
+        
+        // Update fire and gas state tracking for next comparison
+        // (triggers immediate update on next state change, not waiting for interval)
+        lastFireDetected = fireDetected;
+        lastGasLeakage = gasLeakage;
       }
       else
       {

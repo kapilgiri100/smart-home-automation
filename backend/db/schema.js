@@ -62,5 +62,7 @@ export const schedules = pgTable("schedules", {
   timezone: text("timezone").notNull().default("UTC"),
   // e.g. 'America/Los_Angeles'
   isActive: boolean("is_active").notNull().default(true),
+  lastExecuted: timestamp("last_executed"),
+  // Tracks when schedule was last executed to prevent duplicate execution
   createdAt: timestamp("created_at").defaultNow()
 });
