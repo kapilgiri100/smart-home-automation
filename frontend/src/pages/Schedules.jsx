@@ -1,17 +1,7 @@
 import React, { useEffect, useState } from "react";
 import io from "socket.io-client";
 import { Clock, Plus, Trash2, Power, AlertCircle, Calendar, Compass, Lightbulb, Tv, Zap, Check, ToggleLeft, ToggleRight } from "lucide-react";
-
-// Convert stored 24-hour "HH:MM" to 12-hour "h:mm AM/PM" for display
-const formatScheduleTime = time24 => {
-  if (!time24 || typeof time24 !== "string") return time24;
-  const [hourStr, minuteStr = "00"] = time24.split(":");
-  const hour = parseInt(hourStr, 10);
-  if (Number.isNaN(hour)) return time24;
-  const period = hour >= 12 ? "PM" : "AM";
-  const hour12 = hour % 12 || 12;
-  return `${hour12}:${minuteStr.padStart(2, "0")} ${period}`;
-};
+import { formatScheduleTime, convert12ToTime24 } from "../utils/scheduleTime.js";
 
 // Custom simple Fan icon animation component using CSS keyframes
 const FanIcon = ({
@@ -38,8 +28,12 @@ export const Schedules = () => {
   // Form State
   const [selectedAppliance, setSelectedAppliance] = useState("");
   const [selectedAction, setSelectedAction] = useState("ON");
-  const [selectedTime, setSelectedTime] = useState("08:00");
+  const [scheduleHour12, setScheduleHour12] = useState(8);
+  const [scheduleMinute, setScheduleMinute] = useState("00");
+  const [schedulePeriod, setSchedulePeriod] = useState("AM");
   const [detectedTimezone, setDetectedTimezone] = useState("UTC");
+
+  const selectedTime = convert12ToTime24(scheduleHour12, scheduleMinute, schedulePeriod);
   useEffect(() => {
     // Detect local timezone
     try {
@@ -256,18 +250,53 @@ export const Schedules = () => {
                 </div>
               </div>
 
-              {/* Time Picker */}
+              {/* Time Picker — explicit 12-hour + AM/PM for accurate PM scheduling */}
               <div className="space-y-1.5">
                 <label className="text-xs text-slate-400 font-medium">Scheduled Time</label>
-                <div className="relative">
-                  <input type="time" value={selectedTime} onChange={e => setSelectedTime(e.target.value)} className="w-full bg-[#0A0B0D] border border-white/5 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all font-mono" required />
+                <div className="grid grid-cols-3 gap-2">
+                  <select
+                    value={scheduleHour12}
+                    onChange={e => setScheduleHour12(parseInt(e.target.value, 10))}
+                    className="bg-[#0A0B0D] border border-white/5 rounded-xl px-3 py-3 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    required
+                  >
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={scheduleMinute}
+                    onChange={e => setScheduleMinute(e.target.value)}
+                    className="bg-[#0A0B0D] border border-white/5 rounded-xl px-3 py-3 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                    required
+                  >
+                    {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  <div className="grid grid-cols-2 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSchedulePeriod("AM")}
+                      className={`py-3 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all ${schedulePeriod === "AM" ? "bg-blue-600/20 text-blue-300 border-blue-500/40" : "bg-[#0A0B0D] text-slate-500 border-white/5 hover:text-slate-300"}`}
+                    >
+                      AM
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSchedulePeriod("PM")}
+                      className={`py-3 rounded-xl border text-xs font-bold uppercase tracking-wider transition-all ${schedulePeriod === "PM" ? "bg-amber-600/20 text-amber-300 border-amber-500/40" : "bg-[#0A0B0D] text-slate-500 border-white/5 hover:text-slate-300"}`}
+                    >
+                      PM
+                    </button>
+                  </div>
                 </div>
                 <p className="text-[10px] text-slate-500 italic mt-1 leading-normal">
                   Schedules evaluate at exact minute boundaries based on the detected timezone offset.
                 </p>
-                {selectedTime && <p className="text-[11px] text-blue-400 font-medium mt-1">
+                <p className="text-[11px] text-blue-400 font-medium mt-1">
                   Selected: {formatScheduleTime(selectedTime)}
-                </p>}
+                </p>
               </div>
 
               {/* Submit Button */}

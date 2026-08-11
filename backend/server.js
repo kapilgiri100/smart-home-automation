@@ -38,6 +38,28 @@ const io = new Server(httpServer, {
   }
 });
 
+// Reliable 24-hour HH:MM in a given timezone (hourCycle h23 avoids AM/PM ICU bugs)
+function getCurrentTimeHHMM(timeZone) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: timeZone || "UTC",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(new Date());
+  const hour = parts.find(p => p.type === "hour")?.value ?? "00";
+  const minute = parts.find(p => p.type === "minute")?.value ?? "00";
+  return `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
+}
+
+function normalizeTimeHHMM(time) {
+  if (!time || typeof time !== "string") return time;
+  const [hourStr, minuteStr = "00"] = time.split(":");
+  const hour = parseInt(hourStr, 10);
+  const minute = parseInt(minuteStr, 10);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return time;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
 // Helper to log system events securely to PostgreSQL
 async function addActivityLog(eventText) {
   try {
@@ -499,10 +521,11 @@ app.post("/api/schedules", async (req, res) => {
         error: "Missing required fields: applianceId, action, time"
       });
     }
+    const normalizedTime = normalizeTimeHHMM(time);
     const newSched = {
       applianceId,
       action,
-      time,
+      time: normalizedTime,
       timezone: timezone || "UTC",
       isActive: true,
       createdAt: new Date()
@@ -543,7 +566,7 @@ app.put("/api/schedules/:id", async (req, res) => {
       }
     }
     if (typeof time === "string") {
-      updateFields.time = time;
+      updateFields.time = normalizeTimeHHMM(time);
       // Reset lastExecuted when changing the scheduled time
       updateFields.lastExecuted = null;
     }
@@ -1179,19 +1202,12 @@ async function checkSchedules() {
     const activeSchedules = await runWithRetry(() => db.select().from(schedules).where(eq(schedules.isActive, true)));
 
     for (const sched of activeSchedules) {
-      // Format current time into schedule's specific timezone
-      const parts = new Intl.DateTimeFormat("en-US", {
-        timeZone: sched.timezone || "UTC",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false
-      }).formatToParts(now);
-      const hour = parts.find(p => p.type === "hour")?.value || "00";
-      const minute = parts.find(p => p.type === "minute")?.value || "00";
-      const timeStr = `${hour}:${minute}`;
+      // Format current time into schedule's specific timezone (always 24-hour HH:MM)
+      const timeStr = getCurrentTimeHHMM(sched.timezone || "UTC");
+      const schedTime = normalizeTimeHHMM(sched.time);
 
       // Check if it's time to execute this schedule
-      if (timeStr === sched.time) {
+      if (timeStr === schedTime) {
         // Check if this schedule has already been executed in this minute
         // If lastExecuted is within the last 60 seconds, skip (already ran)
         const lastExec = sched.lastExecuted ? new Date(sched.lastExecuted) : null;
