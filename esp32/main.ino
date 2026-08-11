@@ -13,7 +13,7 @@
  *   - Relay 6 (Fire Extinguisher Pump)-> Pin D22 (Automated)
  * - 4 Physical Switches (manual control ONLY for the four light bulbs):
  *   - Switch 1 (Light Bulb 1)        -> Pin D4  (Internal Pullup)
-*   - Switch 2 (Light Bulb 2)        -> Pin D5  (Internal Pullup)
+ *   - Switch 2 (Light Bulb 2)        -> Pin D5  (Internal Pullup)
  *   - Switch 3 (Light Bulb 3)        -> Pin D13 (Internal Pullup, expansion)
  *   - Switch 4 (Light Bulb 4)        -> Pin D23 (Internal Pullup, expansion)
  *   (NOTE: GPIO 16/17 are NOT used because they are hard-wired to the
@@ -147,12 +147,12 @@ const unsigned long UPDATE_INTERVAL = 1500; // Send update every 1.5 seconds
 // and also rejects saturating sunlight by its extreme mean level.
 // Real flame is confirmed only when mean is in-band AND the signal
 // FLICKERS (peak-to-peak or relative flicker ratio).
-const int FLAME_IR_MEAN_MIN = 30;          // ADC avg below this = disconnected / pinned low (no signal)
-const int FLAME_IR_MEAN_MAX = 4090;        // ADC avg above this = pinned at rail; flicker is still the discriminator
-const int FLAME_FLICKER_PP_THRESHOLD = 15; // Absolute peak-to-peak ADC variation -> flicker (REDUCED for better sensitivity)
-const int FLAME_FLICKER_RATIO_X1000 = 15;  // Relative flicker: PP*1000/mean >= this (REDUCED for better sensitivity)
-const int FLAME_WINDOW_SIZE = 20;          // Samples per evaluation window (~0.6s at 30ms) - FASTER response
-const unsigned long FLAME_SAMPLE_INTERVAL_MS = 30; // 30ms between samples = 33 Hz sampling rate
+const int FLAME_IR_MEAN_MIN = 30;                   // ADC avg below this = disconnected / pinned low (no signal)
+const int FLAME_IR_MEAN_MAX = 4090;                 // ADC avg above this = pinned at rail; flicker is still the discriminator
+const int FLAME_FLICKER_PP_THRESHOLD = 15;          // Absolute peak-to-peak ADC variation -> flicker (REDUCED for better sensitivity)
+const int FLAME_FLICKER_RATIO_X1000 = 15;           // Relative flicker: PP*1000/mean >= this (REDUCED for better sensitivity)
+const int FLAME_WINDOW_SIZE = 20;                   // Samples per evaluation window (~0.6s at 30ms) - FASTER response
+const unsigned long FLAME_SAMPLE_INTERVAL_MS = 30;  // 30ms between samples = 33 Hz sampling rate
 const int FLAME_CLEAR_WINDOWS = 2;                  // Clear fire after 2 no-flame windows (~1.2s): prevents jitter
 const unsigned long FLAME_DEBUG_INTERVAL_MS = 5000; // Periodic Serial debug for field tuning
 
@@ -162,7 +162,7 @@ int flameSamples[FLAME_WINDOW_SIZE]; // Ring buffer of recent raw analog reading
 int flameSampleIndex = 0;
 int flameClearWindowCount = 0; // Consecutive no-flame windows (to unlatch fire)
 unsigned long lastFlameDebugTime = 0;
-bool fireDetected = false; // Latched flicker-confirmed fire (default: no fire)
+bool fireDetected = false;     // Latched flicker-confirmed fire (default: no fire)
 bool lastFireDetected = false; // Track previous state to detect transitions (for immediate updates)
 
 // Last known physical states to detect local changes
@@ -513,7 +513,7 @@ void setup()
     digitalWrite(PIN_LED, LOW);
     delay(200);
     digitalWrite(PIN_LED, HIGH);
-    
+
     // Show flame detection system is ready
     Serial.println();
     Serial.println("╔═══════════════════════════════════════════╗");
@@ -683,7 +683,7 @@ void sampleFlameFlicker()
     latestMean = s / FLAME_WINDOW_SIZE;
     latestPP = mx - mn;
     int ratio = latestMean > 0 ? (latestPP * 1000 / latestMean) : 0;
-    
+
     // Enhanced debug output with threshold information
     Serial.print("[FLAME DEBUG] Mean=");
     Serial.print(latestMean);
@@ -718,7 +718,7 @@ void loop()
     {
       lastBackgroundReconnect = millis();
       Serial.println("\n[AUTO-HEAL] Checking background router connection...");
-if (WiFi.status() == WL_CONNECTED)
+      if (WiFi.status() == WL_CONNECTED)
       {
         Serial.println("[AUTO-HEAL] Reconnected to router successfully in background! Resuming normal mode.");
         WiFi.softAPdisconnect(true); // Shut down AP
@@ -1011,7 +1011,7 @@ if (WiFi.status() == WL_CONNECTED)
   bool fireStateChanged = (fireDetected != lastFireDetected);
   bool gasStateChanged = (gasLeakage != lastGasLeakage);
   bool shouldSendUpdate = (millis() - lastUpdateTime > UPDATE_INTERVAL) || stateChanged || fireStateChanged || gasStateChanged;
-  
+
   // Log state changes for troubleshooting
   if (fireStateChanged)
   {
@@ -1023,7 +1023,7 @@ if (WiFi.status() == WL_CONNECTED)
     Serial.print("[ALERT] Gas State Changed: ");
     Serial.println(gasLeakage ? "⚠️  DETECTED → Sending IMMEDIATE backend alert" : "✓ CLEARED → Sending IMMEDIATE backend clear");
   }
-  
+
   if (shouldSendUpdate)
   {
     lastUpdateTime = millis();
@@ -1274,7 +1274,7 @@ if (WiFi.status() == WL_CONNECTED)
         // Reset the physical-toggle flag after one successful update attempt
         // to avoid repeated POSTs caused by the same button press.
         stateChanged = false;
-        
+
         // Update fire and gas state tracking for next comparison
         // (triggers immediate update on next state change, not waiting for interval)
         lastFireDetected = fireDetected;

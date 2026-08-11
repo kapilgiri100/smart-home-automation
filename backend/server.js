@@ -554,7 +554,7 @@ app.put("/api/schedules/:id", async (req, res) => {
     }
     if (typeof applianceId === "string") updateFields.applianceId = applianceId;
     if (typeof timezone === "string") updateFields.timezone = timezone;
-    
+
     await db.update(schedules).set(updateFields).where(eq(schedules.id, id));
     const updated = await db.select().from(schedules).where(eq(schedules.id, id)).limit(1);
 
@@ -1196,20 +1196,20 @@ async function checkSchedules() {
         // If lastExecuted is within the last 60 seconds, skip (already ran)
         const lastExec = sched.lastExecuted ? new Date(sched.lastExecuted) : null;
         const timeSinceLastExec = lastExec ? now - lastExec : Infinity;
-        
+
         if (timeSinceLastExec < 60000) {
           // Already executed within the last minute, skip
           continue;
         }
 
         // Get appliance record
-        const appRecord = await runWithRetry(() => 
+        const appRecord = await runWithRetry(() =>
           db.select().from(appliances).where(eq(appliances.id, sched.applianceId)).limit(1)
         );
-        
+
         if (appRecord[0]) {
           const targetStatus = sched.action === "ON";
-          
+
           // Tank-Full Safety Guard: block scheduled ON for fill pump when tank is full
           if (sched.applianceId === "tv" && targetStatus && await isFillPumpTurnOnBlocked(true)) {
             await addActivityLog(`[SAFETY] Scheduled ON for Overhead Fill Pump blocked — Tank is FULL (${FILL_PUMP_SHUTOFF_LEVEL}%+).`);
@@ -1218,7 +1218,7 @@ async function checkSchedules() {
 
           // ALWAYS execute the scheduled action (regardless of current status)
           // This ensures the device reaches the desired state
-          await runWithRetry(() => 
+          await runWithRetry(() =>
             db.update(appliances).set({
               status: targetStatus,
               updatedAt: new Date()
@@ -1250,8 +1250,8 @@ async function checkSchedules() {
 }
     }
   } catch (error) {
-    console.error("Error evaluating background schedules:", error);
-  }
+  console.error("Error evaluating background schedules:", error);
+}
 }
 
 // Self-healing database initializer to automatically sync appliance names and tables
@@ -1346,7 +1346,7 @@ startStaticServing().then(async () => {
     // This is critical for Render deployments where PostgreSQL starts empty
     console.log("[STARTUP]: Starting database initialization...");
     await createTables();
-    
+
     // Step 2: Initialize and heal database records (seed default data)
     await initializeDatabase();
     console.log("[STARTUP]: Database fully initialized!");
