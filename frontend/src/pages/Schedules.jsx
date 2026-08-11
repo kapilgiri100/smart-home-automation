@@ -1,6 +1,18 @@
 import React, { useEffect, useState } from "react";
 import io from "socket.io-client";
 import { Clock, Plus, Trash2, Power, AlertCircle, Calendar, Compass, Lightbulb, Tv, Zap, Check, ToggleLeft, ToggleRight } from "lucide-react";
+
+// Convert stored 24-hour "HH:MM" to 12-hour "h:mm AM/PM" for display
+const formatScheduleTime = time24 => {
+  if (!time24 || typeof time24 !== "string") return time24;
+  const [hourStr, minuteStr = "00"] = time24.split(":");
+  const hour = parseInt(hourStr, 10);
+  if (Number.isNaN(hour)) return time24;
+  const period = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minuteStr.padStart(2, "0")} ${period}`;
+};
+
 // Custom simple Fan icon animation component using CSS keyframes
 const FanIcon = ({
   className,
@@ -253,6 +265,9 @@ export const Schedules = () => {
                 <p className="text-[10px] text-slate-500 italic mt-1 leading-normal">
                   Schedules evaluate at exact minute boundaries based on the detected timezone offset.
                 </p>
+                {selectedTime && <p className="text-[11px] text-blue-400 font-medium mt-1">
+                  Selected: {formatScheduleTime(selectedTime)}
+                </p>}
               </div>
 
               {/* Submit Button */}
@@ -284,7 +299,7 @@ export const Schedules = () => {
                       {/* Schedule parameters */}
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-white text-base font-mono">{sched.time}</span>
+                          <span className="font-bold text-white text-base">{formatScheduleTime(sched.time)}</span>
                           <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${sched.action === "ON" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25" : "bg-rose-500/10 text-rose-400 border-rose-500/25"}`}>
                             {sched.action}
                           </span>

@@ -1248,11 +1248,6 @@ async function checkSchedules() {
     console.error("Error evaluating background schedules:", error);
   }
 }
-    }
-  } catch (error) {
-  console.error("Error evaluating background schedules:", error);
-}
-}
 
 // Self-healing database initializer to automatically sync appliance names and tables
 async function initializeDatabase() {

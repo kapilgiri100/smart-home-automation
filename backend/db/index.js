@@ -129,8 +129,11 @@ export async function createTables() {
       time TEXT NOT NULL,
       timezone TEXT NOT NULL DEFAULT 'UTC',
       is_active BOOLEAN NOT NULL DEFAULT true,
+      last_executed TIMESTAMP,
       created_at TIMESTAMP DEFAULT NOW()
     )`,
+    // Add last_executed to schedules tables created before this column existed
+    `ALTER TABLE schedules ADD COLUMN IF NOT EXISTS last_executed TIMESTAMP`,
   ];
 
   for (const stmt of statements) {

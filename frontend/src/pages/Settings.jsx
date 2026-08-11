@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
-import { User, Cpu, Network, AlertTriangle, Settings as SettingsIcon, Code, Droplet, Waves, FileCode, Compass, Flame, Music, Play, Trash2, Check, Upload, Volume2 } from "lucide-react";
+import { User, Cpu, Network, AlertTriangle, Settings as SettingsIcon, Code, Droplet, Waves, FileCode, Compass, Flame, Music, Play, Square, Trash2, Check, Upload, Volume2 } from "lucide-react";
 import { getAllSounds, addCustomSound, removeCustomSound, setFireSound, setGasSound, loadSettings } from "../utils/alarmSounds.js";
 export const Settings = () => {
   const {
